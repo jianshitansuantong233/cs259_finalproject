@@ -4,6 +4,7 @@
 
 #include "graph.h"
 #include "bfs-cpu.h"
+#include "bfs-cpu-pull.h"
 
 constexpr nid_t PRINT_MAX_NODES = 10;
 constexpr offset_t PRINT_MAX_EDGES = 30;
@@ -51,7 +52,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // Get validation depths.
+  // Get validation depths for push.
   depth_t *depths = new depth_t[pushG.num_nodes];
   for (nid_t u = 0; u < pushG.num_nodes; u++)
     depths[u] = INVALID_DEPTH;
@@ -61,6 +62,20 @@ int main(int argc, char *argv[]) {
   
   if (pushG.num_nodes <= PRINT_MAX_NODES) {
     for (nid_t u = 0; u < pushG.num_nodes; u++)
+      std::cout << depths[u] << " ";
+    std::cout << std::endl;
+  }
+
+  // Get validation depths for pull.
+  depth_t *depths_pull = new depth_t[pullG.num_nodes];
+  for (nid_t u = 0; u < pullG.num_nodes; u++)
+    depths_pull[u] = INVALID_DEPTH;
+
+  nid_t start_pull = 0; // Arbitrary (needs to be random in the future).
+  bfs_cpu_pull(&pullG, start_pull, depths_pull);
+  
+  if (pullG.num_nodes <= PRINT_MAX_NODES) {
+    for (nid_t u = 0; u < pullG.num_nodes; u++)
       std::cout << depths[u] << " ";
     std::cout << std::endl;
   }
