@@ -2,19 +2,29 @@
 #define GRAPH_H
 
 #include <cstdint>
-#include <fstream>
+#include <istream>
 #include <string>
 #include <vector>
 #include <unordered_map>
 
+// Base types.
 using nid_t = uint32_t;
 using offset_t = nid_t;
 using edge_t = std::pair<nid_t, nid_t>;
 using edge_list_t = std::vector<edge_t>;
 using depth_t = int;
 
+// Invalid depth.
 constexpr depth_t INVALID_DEPTH = -1;
 
+/**
+ * Compressed graph format.
+ * For a node u, it's neighbors' range is defined by 
+ * [index[u], index[u + 1]).
+ * To access the neighbors, use a loop similar to this
+ * for off = index[u] until index[u + 1]: // Exclusive
+ *    v = neighbors[off]
+ */
 struct CompressedGraph {
   offset_t *index;
   nid_t *neighbors;
@@ -22,10 +32,14 @@ struct CompressedGraph {
   offset_t num_edges;
 };
 
-using CSRGraph = CompressedGraph;
-using CSCGraph = CompressedGraph;
+// Compressed graph formats.
+using PushGraph = CompressedGraph;
+using PullGraph = CompressedGraph;
 
-edge_list_t load_edgelist(std::ifstream &in) {
+/**
+ * Loads in edge list from input stream.
+ */
+edge_list_t load_edgelist(std::istream &in) {
   edge_list_t edge_list;
   nid_t u, v;
   
@@ -35,8 +49,15 @@ edge_list_t load_edgelist(std::ifstream &in) {
   return edge_list;
 }
 
-void *build_graphs(edge_list_t edge_list, 
-    CSRGraph * const csrG, CSCGraph * const cscG) {
+/**
+ * Constructs CSR and CSC graphs from an edge list.
+ * Parmeters:
+ *   - edge_list <- graph edge list.
+ *   - pushG     <- pointer to push graph.
+ *   - pullG     <- pointer to pull graph.
+ */
+void *build_graphs(const edge_list_t edge_list, 
+    PushGraph * const pushG, PullGraph * const pullG) {
   // Determine neighbors and remap nodes.
   std::unordered_map<nid_t, nid_t> node_rename;
   std::unordered_map<nid_t, std::vector<nid_t>> node_to_children;
@@ -57,30 +78,30 @@ void *build_graphs(edge_list_t edge_list,
   }
 
   // Generate CSC and CSR graphs.
-  csrG->index = new offset_t[rename_id + 1];
-  csrG->neighbors = new nid_t[num_edges];
-  cscG->index = new offset_t[rename_id + 1];
-  cscG->neighbors = new nid_t[num_edges];
+  pushG->index = new offset_t[rename_id + 1];
+  pushG->neighbors = new nid_t[num_edges];
+  pullG->index = new offset_t[rename_id + 1];
+  pullG->neighbors = new nid_t[num_edges];
 
-  csrG->num_nodes = cscG->num_nodes = rename_id;
-  csrG->num_edges = cscG->num_edges = num_edges;
-  csrG->index[0] = cscG->index[0] = 0;
+  pushG->num_nodes = pullG->num_nodes = rename_id;
+  pushG->num_edges = pullG->num_edges = num_edges;
+  pushG->index[0] = pullG->index[0] = 0;
 
   for (nid_t u = 0; u < rename_id; u++) {
     // CSR (push)
     {
       auto neighbors = node_to_children[u];
-      csrG->index[u + 1] = csrG->index[u] + neighbors.size();
+      pushG->index[u + 1] = pushG->index[u] + neighbors.size();
       for (offset_t off = 0; off < neighbors.size(); off++)
-        csrG->neighbors[csrG->index[u] + off] = neighbors[off];
+        pushG->neighbors[pushG->index[u] + off] = neighbors[off];
     }
 
     // CSC (pull)
     {
       auto neighbors = node_to_parents[u];
-      cscG->index[u + 1] = cscG->index[u] + neighbors.size();
+      pullG->index[u + 1] = pullG->index[u] + neighbors.size();
       for (offset_t off = 0; off < neighbors.size(); off++)
-        cscG->neighbors[cscG->index[u] + off] = neighbors[off];
+        pullG->neighbors[pullG->index[u] + off] = neighbors[off];
     }
   }
 }

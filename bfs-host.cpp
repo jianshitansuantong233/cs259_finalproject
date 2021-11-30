@@ -19,48 +19,48 @@ int main(int argc, char *argv[]) {
   }
 
   // Bulid CSR (push) and CSC (pull) graphs.
-  CSRGraph csrG;
-  CSCGraph cscG;
+  PushGraph pushG;
+  PullGraph pullG;
 
-  build_graphs(edge_list, &csrG, &cscG);
+  build_graphs(edge_list, &pushG, &pullG);
 
   // Validation.
-  if (csrG.num_nodes <= PRINT_MAX_NODES) {
+  if (pushG.num_nodes <= PRINT_MAX_NODES) {
     std::cout << "CSR Graph" << std::endl
-              << "- num nodes: " << csrG.num_nodes << std::endl
-              << "- num edges: " << csrG.num_edges << std::endl;
-    for (nid_t u = 0; u < csrG.num_nodes; u++) {
+              << "- num nodes: " << pushG.num_nodes << std::endl
+              << "- num edges: " << pushG.num_edges << std::endl;
+    for (nid_t u = 0; u < pushG.num_nodes; u++) {
       std::cout << "- " << u << ": ";
-      for (offset_t off = csrG.index[u]; off < csrG.index[u + 1]; off++) {
-        std::cout << csrG.neighbors[off] << " ";
+      for (offset_t off = pushG.index[u]; off < pushG.index[u + 1]; off++) {
+        std::cout << pushG.neighbors[off] << " ";
       }
       std::cout << std::endl;
     }
   }
 
-  if (cscG.num_nodes <= PRINT_MAX_NODES) {
+  if (pullG.num_nodes <= PRINT_MAX_NODES) {
     std::cout << "CSC Graph" << std::endl
-              << "- num nodes: " << cscG.num_nodes << std::endl
-              << "- num edges: " << cscG.num_edges << std::endl;
-    for (nid_t u = 0; u < cscG.num_nodes; u++) {
+              << "- num nodes: " << pullG.num_nodes << std::endl
+              << "- num edges: " << pullG.num_edges << std::endl;
+    for (nid_t u = 0; u < pullG.num_nodes; u++) {
       std::cout << "- " << u << ": ";
-      for (offset_t off = cscG.index[u]; off < cscG.index[u + 1]; off++) {
-        std::cout << cscG.neighbors[off] << " ";
+      for (offset_t off = pullG.index[u]; off < pullG.index[u + 1]; off++) {
+        std::cout << pullG.neighbors[off] << " ";
       }
       std::cout << std::endl;
     }
   }
 
   // Get validation depths.
-  depth_t *depths = new depth_t[csrG.num_nodes];
-  for (nid_t u = 0; u < csrG.num_nodes; u++)
+  depth_t *depths = new depth_t[pushG.num_nodes];
+  for (nid_t u = 0; u < pushG.num_nodes; u++)
     depths[u] = INVALID_DEPTH;
 
   nid_t start = 0; // Arbitrary (needs to be random in the future).
-  bfs_cpu(&csrG, start, depths);
+  bfs_cpu(&pushG, start, depths);
   
-  if (csrG.num_nodes <= PRINT_MAX_NODES) {
-    for (nid_t u = 0; u < csrG.num_nodes; u++)
+  if (pushG.num_nodes <= PRINT_MAX_NODES) {
+    for (nid_t u = 0; u < pushG.num_nodes; u++)
       std::cout << depths[u] << " ";
     std::cout << std::endl;
   }

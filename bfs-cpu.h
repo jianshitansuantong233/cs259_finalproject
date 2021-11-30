@@ -8,11 +8,11 @@
 /**
  * Performs BFS push serially on CPU (single threaded).
  * Parameters:
- *   - G <- CSR graph (push).
- *   - start <- start node ID.
+ *   - G      <- push graph.
+ *   - start  <- start node ID.
  *   - depths <- depths array (must all be initialized to INVALID_DEPTH).
  */
-void bfs_cpu(CSRGraph * const G, nid_t start, depth_t * const depths) {
+void bfs_cpu(PushGraph * const G, nid_t start, depth_t * const depths) {
   depths[start] = 0;
   std::queue<nid_t> frontier;
   frontier.push(start);
