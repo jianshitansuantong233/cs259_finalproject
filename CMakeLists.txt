@@ -10,7 +10,7 @@ find_package(TAPA REQUIRED)
 find_package(SDx REQUIRED)
 
 add_executable(bfs)
-target_sources(bfs PRIVATE nxgraph.hpp bfs-host.cpp bfs.cpp)
+target_sources(bfs PRIVATE bfs-host.cpp bfs.cpp)
 target_link_libraries(bfs PRIVATE tapa::tapa)
 file(
   DOWNLOAD "https://snap.stanford.edu/data/facebook_combined.txt.gz"
@@ -35,9 +35,13 @@ add_xocc_hw_link_targets(
   HW_EMU_XCLBIN hw_emu_xclbin
   HW_XCLBIN hw_xclbin)
 
+#add_custom_target(
+  #swsim
+  #COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_BINARY_DIR}/facebook.txt 512
+  #DEPENDS bfs)
 add_custom_target(
   swsim
-  COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_BINARY_DIR}/facebook.txt 512
+  COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_BINARY_DIR}/graph.txt 512
   DEPENDS bfs)
 add_custom_target(
   hwsim
