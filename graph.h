@@ -11,6 +11,9 @@ using nid_t = uint32_t;
 using offset_t = nid_t;
 using edge_t = std::pair<nid_t, nid_t>;
 using edge_list_t = std::vector<edge_t>;
+using depth_t = int;
+
+constexpr depth_t INVALID_DEPTH = -1;
 
 struct CompressedGraph {
   offset_t *index;
