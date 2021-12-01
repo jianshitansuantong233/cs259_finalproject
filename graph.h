@@ -8,11 +8,11 @@
 #include <unordered_map>
 
 // Base types.
-using nid_t = uint32_t;
-using offset_t = nid_t;
-using edge_t = std::pair<nid_t, nid_t>;
+using nid_t       = uint32_t;
+using offset_t    = nid_t;
+using edge_t      = std::pair<nid_t, nid_t>;
 using edge_list_t = std::vector<edge_t>;
-using depth_t = int;
+using depth_t     = int;
 
 // Invalid depth.
 constexpr depth_t INVALID_DEPTH = -1;
@@ -52,28 +52,32 @@ edge_list_t load_edgelist(std::istream &in) {
 /**
  * Constructs CSR and CSC graphs from an edge list.
  * Parmeters:
- *   - edge_list <- graph edge list.
+ *   - edge_list <- graph edge list (remap edge list too).
  *   - pushG     <- pointer to push graph.
  *   - pullG     <- pointer to pull graph.
  */
-void *build_graphs(const edge_list_t edge_list, 
-    PushGraph * const pushG, PullGraph * const pullG) {
+void *build_graphs(edge_list_t &edge_list, 
+    PushGraph * const pushG, PullGraph * const pullG
+) {
   // Determine neighbors and remap nodes.
   std::unordered_map<nid_t, nid_t> node_rename;
   std::unordered_map<nid_t, std::vector<nid_t>> node_to_children;
   std::unordered_map<nid_t, std::vector<nid_t>> node_to_parents;
   nid_t rename_id = 0;
   offset_t num_edges = 0;
-  for (const auto &edge : edge_list) {
+  for (auto &edge : edge_list) {
     if (not node_rename.count(edge.first))
       node_rename[edge.first] = rename_id++;
     if (not node_rename.count(edge.second))
       node_rename[edge.second] = rename_id++;
 
-    node_to_children[node_rename[edge.first]]
-      .push_back(node_rename[edge.second]);
-    node_to_parents[node_rename[edge.second]]
-      .push_back(node_rename[edge.first]);
+    // Remap edge.
+    edge.first = node_rename[edge.first];
+    edge.second = node_rename[edge.second];
+
+    // Push renamed edges to the appropriate neighbors list.
+    node_to_children[edge.first].push_back(edge.second);
+    node_to_parents[edge.second].push_back(edge.first);
     num_edges++;
   }
 
@@ -105,5 +109,20 @@ void *build_graphs(const edge_list_t edge_list,
     }
   }
 }
+
+// Sort functions.
+struct {
+  bool operator()(const edge_t &e1, const edge_t &e2) const {
+    return e1.first < e2.first or 
+      (e1.first == e2.first and e1.second < e2.second);
+  }
+} AscendingParentNode;
+
+struct {
+  bool operator()(const edge_t &e1, const edge_t &e2) const {
+    return e1.second < e2.second or
+      (e1.second == e2.second and e1.first < e2.first);
+  }
+} AscendingChildNode;
 
 #endif // GRAPH_H
