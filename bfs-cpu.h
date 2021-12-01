@@ -1,36 +1,13 @@
 #ifndef BFS_CPU_H
 #define BFS_CPU_H
 
-#include <queue>
+#include <vector>
 
 #include "graph.h"
 
-/**
- * Performs BFS push serially on CPU (single threaded).
- * Parameters:
- *   - G      <- push graph.
- *   - start  <- start node ID.
- *   - depths <- depths array (must all be initialized to INVALID_DEPTH).
- */
-void bfs_cpu(PushGraph * const G, nid_t start, depth_t * const depths) {
-  depths[start] = 0;
-  std::queue<nid_t> frontier;
-  frontier.push(start);
-
-  while (not frontier.empty()) {
-    auto u = frontier.front();
-    frontier.pop();
-
-    for (offset_t off = G->index[u]; off < G->index[u + 1]; off++) {
-      auto v = G->neighbors[off];
-
-      // If unexplored, update.
-      if (depths[v] == INVALID_DEPTH) {
-        depths[v] = depths[u] + 1;
-        frontier.push(v);
-      }
-    }
-  }
-}
+void bfs_cpu_push(const PushGraph &g, nid_t start, 
+    std::vector<depth_t> &depths);
+void bfs_cpu_pull(const PullGraph &g, nid_t start, 
+    std::vector<depth_t> &depths);
 
 #endif // BFS_CPU_H
