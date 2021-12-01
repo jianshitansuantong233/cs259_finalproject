@@ -10,7 +10,7 @@ find_package(TAPA REQUIRED)
 find_package(SDx REQUIRED)
 
 add_executable(bfs)
-target_sources(bfs PRIVATE bfs-host.cpp bfs.cpp)
+target_sources(bfs PRIVATE bfs-host.cpp bfs.cpp graph.cpp)
 target_link_libraries(bfs PRIVATE tapa::tapa)
 file(
   DOWNLOAD "https://snap.stanford.edu/data/facebook_combined.txt.gz"
