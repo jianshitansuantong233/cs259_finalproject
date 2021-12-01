@@ -3,9 +3,7 @@
 
 #include <cstdint>
 #include <istream>
-#include <string>
 #include <vector>
-#include <unordered_map>
 
 // Base types.
 using nid_t       = uint32_t;
@@ -26,10 +24,10 @@ constexpr depth_t INVALID_DEPTH = -1;
  *    v = neighbors[off]
  */
 struct CompressedGraph {
-  offset_t *index;  // offset array
-  nid_t *neighbors; // edge array 
-  nid_t num_nodes;
-  offset_t num_edges;
+  std::vector<offset_t> index;     // offset array
+  std::vector<nid_t>    neighbors; // edge array 
+  nid_t                 num_nodes;
+  offset_t              num_edges;
 };
 
 // Compressed graph formats.

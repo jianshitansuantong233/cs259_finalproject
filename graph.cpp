@@ -1,5 +1,7 @@
 #include "graph.h"
 
+#include <unordered_map>
+
 /**
  * Loads in edge list from input stream.
  */
@@ -46,10 +48,10 @@ void build_graphs(edge_list_t &edge_list,
   }
 
   // Generate CSC and CSR graphs.
-  pushG->index = new offset_t[rename_id + 1];
-  pushG->neighbors = new nid_t[num_edges];
-  pullG->index = new offset_t[rename_id + 1];
-  pullG->neighbors = new nid_t[num_edges];
+  pushG->index = std::vector<offset_t>(rename_id + 1);
+  pushG->neighbors = std::vector<nid_t>(num_edges);
+  pullG->index = std::vector<offset_t>(rename_id + 1);
+  pullG->neighbors = std::vector<nid_t>(num_edges);
 
   pushG->num_nodes = pullG->num_nodes = rename_id;
   pushG->num_edges = pullG->num_edges = num_edges;
