@@ -56,7 +56,7 @@ edge_list_t load_edgelist(std::istream &in) {
  *   - pushG     <- pointer to push graph.
  *   - pullG     <- pointer to pull graph.
  */
-void *build_graphs(edge_list_t &edge_list, 
+void build_graphs(edge_list_t &edge_list, 
     PushGraph * const pushG, PullGraph * const pullG
 ) {
   // Determine neighbors and remap nodes.
