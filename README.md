@@ -28,6 +28,11 @@ run
 echo "source <(curl -L bit.ly/3BzVG16)" >> ~/.bashrc
 ```
 
+link to the header files
+```bash
+sudo ln -sf /tools/Xilinx/Vitis_HLS/2020.2/include/* /usr/local/include/
+```
+
 ### Building and Running the Code
 Clone repo.
 ```bash
