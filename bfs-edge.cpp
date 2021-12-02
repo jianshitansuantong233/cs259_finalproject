@@ -17,7 +17,7 @@ const int MAX_EDGE = 1024;
  * @param[in]  edges          - edges
  * @param[out] updates        - update tuples
  */
-void Bfs(Pid num_partitions, tapa::mmap<const Vid> num_vertices,
+/*void Bfs(Pid num_partitions, tapa::mmap<const Vid> num_vertices,
          tapa::mmap<const Eid> num_edges, tapa::mmap<VertexAttr> vertices,
          tapa::mmap<bits<Edge>> edges, tapa::mmap<bits<Update>> updates) {
   tapa::stream<Edge, MAX_EDGE> edge_stream("edge_stream");
@@ -32,12 +32,12 @@ void Bfs(Pid num_partitions, tapa::mmap<const Vid> num_vertices,
               update_stream, gathered_stream)
       .invoke(Apply, gathered_stream);
 }
-
+*/
 /**
  * @details Cache for vertices
  * TBD
  */
-tapa::mmap<VertexAttr> GLOBAL_VER;
+//tapa::mmap<VertexAttr> GLOBAL_VER;
 
 
 /**
@@ -46,7 +46,7 @@ tapa::mmap<VertexAttr> GLOBAL_VER;
  * @param[in]  edges         - edges (preferrably in istream form)
  * @param[out] updates       - temporary update tuples
  */
-void Scatter(tapa::istream<bits<Edge>>& edges, tapa::ostream<bits<Update>>& updates){
+/*void Scatter(tapa::istream<bits<Edge>>& edges, tapa::ostream<bits<Update>>& updates){
     TAPA_WHILE_NOT_EOT(edges) {
         auto edge = edges.read();
         std::cout <<"Processing edge"<<edge;
@@ -55,7 +55,7 @@ void Scatter(tapa::istream<bits<Edge>>& edges, tapa::ostream<bits<Update>>& upda
         u.depth = GLOBAL_VER[edge.src]+1;
         updates.write(u);
     }
-}
+}*/
 /**
  * @details Gather stage of bfs
  * 
@@ -65,7 +65,7 @@ void Scatter(tapa::istream<bits<Edge>>& edges, tapa::ostream<bits<Update>>& upda
  * @param[in] temp_updates       - temporary update tuples
  * @param[out] updates           - final update tuples
  */
-void Gather(Vid num_vertices, Vid vertex_offset, tapa::mmap<VertexAttr> vertices,
+/*void Gather(Vid num_vertices, Vid vertex_offset, tapa::mmap<VertexAttr> vertices,
             tapa::istream<bits<Update>>& temp_updates, tapa::ostream<bits<Update>>& updates){
     // Predefined max number of vertices in a partition
     assert(num_vertices<4);
@@ -81,18 +81,18 @@ void Gather(Vid num_vertices, Vid vertex_offset, tapa::mmap<VertexAttr> vertices
         temp.depth = vertices[i];
         updates.write(temp);
     }
-}
+}*/
 /**
  * @details Apply stage of bfs
  * 
  * @param[in] updates            - final update tuples
  */
-void Apply(tapa::istream<bits<Update>>& updates){
+/*void Apply(tapa::istream<bits<Update>>& updates){
     TAPA_WHILE_NOT_EOT(updates) {
         Update u = updates.read();
         GLOBAL_VER[u.dst] = u.depth;
     }
-}
+}*/
 /**
  * @details Bfs with Scatter-Gather. Input partitions are expected to have the same order
  *          as specified in ThunderGP. CPU version.

@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) {
   build_graphs(edge_list, &pushG, &pullG);
 
   // @Feiqian sort by parent node (i.e., edge (u, v) is sorted by ascending u).
-  std::sort(edge_list.begin(), edge_list.end(), AscendingParentNode);  
+  std::sort(edge_list.begin(), edge_list.end(), AscendingChildNode);  
 
   // Validate constructed edge list and graph.
   {
