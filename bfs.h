@@ -10,9 +10,10 @@
 //template <typename T>
 //using bits = ap_uint<tapa::widthof<T>()>;
 
-void bfs_fpga_pull(
+void bfs_fpga(
     const nid_t start, const nid_t num_nodes,
-    tapa::mmap<offset_t> index, tapa::mmap<nid_t> neighbors,
-    tapa::mmap<depth_t> depths);
+    tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
+    tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
+    tapa::mmap<depth_t> depth);
 
 #endif  // BFS_H_

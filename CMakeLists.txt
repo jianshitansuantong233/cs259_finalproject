@@ -26,7 +26,7 @@ execute_process(
 add_tapa_target(
   hls
   INPUT bfs.cpp
-  TOP bfs_fpga_pull
+  TOP bfs_fpga
   PLATFORM ${PLATFORM})
 
 add_xocc_hw_link_targets(

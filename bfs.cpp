@@ -6,6 +6,8 @@
 #include "bitmap.h"
 #include "util.h"
 
+constexpr bool PUSH_OR_PULL = true; // true = PUSH, false = PULL
+
 constexpr nid_t MAX_NODES = 4500;
 enum Mode { push = 0, pull = 1 };
 
@@ -16,7 +18,7 @@ void Controller(const nid_t start,
   config_q.close();
 
   Mode mode = Mode::push;
-  for (;;) {
+  for (int iter = 0; iter < 10; iter++) {
     nid_t update = 0;
     TAPA_WHILE_NOT_EOT(ir_q) {
       update += ir_q.read(nullptr);
@@ -28,11 +30,8 @@ void Controller(const nid_t start,
     // If no updates, the kernel is done!
     if (update == 0) break;
 
-    if (mode == Mode::push) {
-      config_q.write(Mode::push);
-    } else {
-      config_q.write(Mode::pull);
-    }
+    // Hardcode direction for now.
+    config_q.write(PUSH_OR_PULL ? Mode::push : Mode::pull);
     config_q.close();
   }
 }
@@ -40,7 +39,8 @@ void Controller(const nid_t start,
 void ProcessingElement(
     const nid_t num_nodes, tapa::istream<nid_t> config_q,
     tapa::ostream<nid_t> update_q, tapa::ostream<offset_t> ir_q,
-    tapa::mmap<offset_t> index, tapa::mmap<nid_t> neighbors,
+    tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
+    tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
     tapa::mmap<depth_t> depth,
     Bitmap::bitmap_t *frontier, Bitmap::bitmap_t *next_frontier
 ) {
@@ -54,7 +54,7 @@ void ProcessingElement(
   update_q.close(); // End update stream.
 
   // First iteration is always push.
-  bool is_push = true;
+  bool is_push = PUSH_OR_PULL;
   offset_t update; // Update info for DO.
 
   for (;;) {
@@ -63,19 +63,38 @@ void ProcessingElement(
     if (is_push) { // PUSH
       for (nid_t u = 0; u < num_nodes; u++) {
         if (Bitmap::get_bit(frontier, u)) {
-          for (offset_t off = index[u]; off < index[u + 1]; off++) {
-            nid_t v = neighbors[off];
+          DEBUG(std::cout << "[push] node " << u << ": ");
+          for (offset_t off = push_index[u]; off < push_index[u + 1]; off++) {
+            nid_t v = push_neighbors[off];
             if (depth[v] == INVALID_DEPTH) {
+              DEBUG(std::cout << v << " ");
               Bitmap::set_bit(next_frontier, v);
               update_q.write(v);
               update++; // TEMP
             }
           }          
-          //update += index[u + 1] - index[u];
+          DEBUG(std::cout << std::endl);
+          // TODO: need no return the edges traversed for DO.
+          //update += push_index[u + 1] - push_index[u];
         }
       }
     } else { // PULL
-
+      for (nid_t v = 0; v < num_nodes; v++) {
+        if (depth[v] == INVALID_DEPTH) {
+          DEBUG(std::cout << "[pull] node " << v << ": ");
+          for (offset_t off = pull_index[v]; off < pull_index[v + 1]; off++) {
+            nid_t u = pull_neighbors[off];
+            if (Bitmap::get_bit(frontier, u)) {
+              Bitmap::set_bit(next_frontier, v);
+              update_q.write(v);
+              update++;
+              DEBUG(std::cout << u);
+              break;
+            }
+          }
+          DEBUG(std::cout << std::endl);
+        }
+      }
     }
     update_q.close(); // Inform DepthWriter the current epoch has ended.
 
@@ -117,14 +136,17 @@ void DepthWriter(tapa::istream<nid_t> update_q, tapa::mmap<depth_t> depth) {
   }
 }
 
-void bfs_fpga_pull(
+void bfs_fpga(
     const nid_t start, const nid_t num_nodes,
-    tapa::mmap<offset_t> index, tapa::mmap<nid_t> neighbors,
+    tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
+    tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
     tapa::mmap<depth_t> depth
 ) {
   // Shared frontiers.
   Bitmap::bitmap_t frontier1[Bitmap::bitmap_size(MAX_NODES)];
   Bitmap::bitmap_t frontier2[Bitmap::bitmap_size(MAX_NODES)];
+  for (size_t i = 0; i < Bitmap::bitmap_size(MAX_NODES); i++)
+    frontier1[i] = frontier2[i] = 0;
 
   tapa::stream<nid_t, 1>    config_q;
   tapa::stream<nid_t, 8>    update_q;
@@ -133,7 +155,8 @@ void bfs_fpga_pull(
   tapa::task()
     .invoke(Controller, start, config_q, ir_q)
     .invoke<tapa::detach>(ProcessingElement, num_nodes, config_q, update_q, 
-        ir_q, index, neighbors, depth, frontier1, frontier2)
+        ir_q, push_index, push_neighbors, pull_index, pull_neighbors,
+        depth, frontier1, frontier2)
     .invoke<tapa::detach>(DepthWriter, update_q, depth);
 }
 
