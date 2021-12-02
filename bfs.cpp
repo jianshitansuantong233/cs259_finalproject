@@ -2,11 +2,12 @@
 #include "bfs.h"
 
 #include <algorithm>
+#include <assert.h>
 #include <iostream>
 #include "bitmap.h"
 #include "util.h"
 
-constexpr bool PUSH_OR_PULL = true; // true = PUSH, false = PULL
+constexpr bool PUSH_OR_PULL = false; // true = PUSH, false = PULL
 
 constexpr nid_t MAX_NODES = 4500;
 enum Mode { push = 0, pull = 1 };
@@ -81,18 +82,16 @@ void ProcessingElement(
     } else { // PULL
       for (nid_t v = 0; v < num_nodes; v++) {
         if (depth[v] == INVALID_DEPTH) {
-          DEBUG(std::cout << "[pull] node " << v << ": ");
           for (offset_t off = pull_index[v]; off < pull_index[v + 1]; off++) {
             nid_t u = pull_neighbors[off];
             if (Bitmap::get_bit(frontier, u)) {
               Bitmap::set_bit(next_frontier, v);
               update_q.write(v);
               update++;
-              DEBUG(std::cout << u);
+              DEBUG(std::cout << "[pull] node " << v << ": " << u << std::endl);
               break;
             }
           }
-          DEBUG(std::cout << std::endl);
         }
       }
     }
@@ -142,6 +141,7 @@ void bfs_fpga(
     tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
     tapa::mmap<depth_t> depth
 ) {
+  assert(num_nodes < MAX_NODES);
   // Shared frontiers.
   Bitmap::bitmap_t frontier1[Bitmap::bitmap_size(MAX_NODES)];
   Bitmap::bitmap_t frontier2[Bitmap::bitmap_size(MAX_NODES)];
