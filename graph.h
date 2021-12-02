@@ -39,6 +39,19 @@ using PullGraph = CompressedGraph;
  */
 edge_list_t load_edgelist(std::istream &in);
 
+/*
+ * Implementing using tapa, uncomment these
+#include <tapa.h>
+void stream_ordered_edges(edge_list_t e, tapa::ostream<bits<Edge>> s){
+  for(int i=0;i<e.length();i++){
+    Edge temp;
+    temp.src = e[i].first;
+    temp.dst = e[i].second;
+    s.write(temp);
+  }
+}
+
+*/
 /**
  * Constructs CSR and CSC graphs from an edge list.
  * Parmeters:
