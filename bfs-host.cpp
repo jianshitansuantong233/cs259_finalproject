@@ -80,20 +80,6 @@ int main(int argc, char *argv[]) {
     });
   }
 
-  DEBUG(
-  std::cout << "Pull Graph" << std::endl
-            << "- num nodes: " << pullG.num_nodes << std::endl
-            << "- num edges: " << pullG.num_edges << std::endl;
-  for (nid_t u = 0; u < 10; u++) {
-    std::cout << "- " << u << ": ";
-    for (offset_t off = pullG.index[u]; off < pullG.index[u + 1]; off++) {
-      std::cout << pullG.neighbors[off] << " ";
-    }
-    std::cout << std::endl;
-  }
-  );
-
-
   // Run and validate FPGA kernel.
   {
     nid_t start = 0; // Arbitrary.
@@ -105,7 +91,7 @@ int main(int argc, char *argv[]) {
     }
 
     tapa::invoke(
-        bfs_fpga, bitstream, 0, pushG.num_nodes,
+        bfs_fpga, bitstream, start, pushG.num_nodes,
         tapa::read_only_mmap<offset_t>(pushG.index),
         tapa::read_only_mmap<nid_t>(pushG.neighbors),
         tapa::read_only_mmap<offset_t>(pullG.index),

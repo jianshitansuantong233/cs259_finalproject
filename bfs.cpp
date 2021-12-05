@@ -7,13 +7,13 @@
 #include "bitmap.h"
 #include "util.h"
 
-constexpr bool PUSH_OR_PULL = false; // true = PUSH, false = PULL
+constexpr bool PUSH_OR_PULL = true; // true = PUSH, false = PULL
 
 constexpr nid_t MAX_NODES = 4500;
 enum Mode { push = 0, pull = 1 };
 
-void Controller(const nid_t start, 
-    tapa::ostream<nid_t> config_q, tapa::istream<offset_t> ir_q
+void Controller(nid_t start, 
+    tapa::ostream<nid_t> &config_q, tapa::istream<offset_t> &ir_q
 ) {
   config_q.write(start);
   config_q.close();
@@ -38,13 +38,17 @@ void Controller(const nid_t start,
 }
 
 void ProcessingElement(
-    const nid_t num_nodes, tapa::istream<nid_t> config_q,
-    tapa::ostream<nid_t> update_q, tapa::ostream<offset_t> ir_q,
+    nid_t num_nodes, tapa::istream<nid_t> &config_q,
+    tapa::ostream<nid_t> &update_q, tapa::ostream<offset_t> &ir_q,
     tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
     tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
-    tapa::mmap<depth_t> depth,
-    Bitmap::bitmap_t *frontier, Bitmap::bitmap_t *next_frontier
+    tapa::mmap<depth_t> depth
 ) {
+  Bitmap::bitmap_t frontier[Bitmap::bitmap_size(MAX_NODES)];
+  Bitmap::bitmap_t next_frontier[Bitmap::bitmap_size(MAX_NODES)];
+  for (nid_t i = 0; i < Bitmap::bitmap_size(MAX_NODES); i++)
+    frontier[i] = next_frontier[i] = 0;
+
   // Setup starting node.
   TAPA_WHILE_NOT_EOT(config_q) {
     nid_t u = config_q.read(nullptr);
@@ -119,7 +123,7 @@ void ProcessingElement(
   }
 }
 
-void DepthWriter(tapa::istream<nid_t> update_q, tapa::mmap<depth_t> depth) {
+void DepthWriter(tapa::istream<nid_t> &update_q, tapa::mmap<depth_t> depth) {
   depth_t cur_depth = 0;
   for (;;) {
     TAPA_WHILE_NOT_EOT(update_q) {
@@ -136,18 +140,12 @@ void DepthWriter(tapa::istream<nid_t> update_q, tapa::mmap<depth_t> depth) {
 }
 
 void bfs_fpga(
-    const nid_t start, const nid_t num_nodes,
+    nid_t start, nid_t num_nodes,
     tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
     tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
     tapa::mmap<depth_t> depth
 ) {
   assert(num_nodes < MAX_NODES);
-  // Shared frontiers.
-  Bitmap::bitmap_t frontier1[Bitmap::bitmap_size(MAX_NODES)];
-  Bitmap::bitmap_t frontier2[Bitmap::bitmap_size(MAX_NODES)];
-  for (size_t i = 0; i < Bitmap::bitmap_size(MAX_NODES); i++)
-    frontier1[i] = frontier2[i] = 0;
-
   tapa::stream<nid_t, 1>    config_q;
   tapa::stream<nid_t, 8>    update_q;
   tapa::stream<offset_t, 1> ir_q;
@@ -156,7 +154,7 @@ void bfs_fpga(
     .invoke(Controller, start, config_q, ir_q)
     .invoke<tapa::detach>(ProcessingElement, num_nodes, config_q, update_q, 
         ir_q, push_index, push_neighbors, pull_index, pull_neighbors,
-        depth, frontier1, frontier2)
+        depth)
     .invoke<tapa::detach>(DepthWriter, update_q, depth);
 }
 
