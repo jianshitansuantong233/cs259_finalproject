@@ -1,5 +1,5 @@
-#ifndef BFS_H_
-#define BFS_H_
+#ifndef BFS_FPGA_H
+#define BFS_FPGA_H
 
 #include <ap_int.h>
 #include <cassert>
@@ -17,4 +17,4 @@ void bfs_fpga(
     tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
     tapa::mmap<depth_t> depth);
 
-#endif  // BFS_H_
+#endif  // BFS_FPGA_H

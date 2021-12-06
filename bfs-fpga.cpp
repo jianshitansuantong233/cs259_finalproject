@@ -1,5 +1,5 @@
 #define DEBUG_ON
-#include "bfs.h"
+#include "bfs-fpga.h"
 
 #include <algorithm>
 #include <assert.h>
@@ -12,10 +12,10 @@ constexpr bool PUSH_OR_PULL = true; // true = PUSH, false = PULL
 constexpr nid_t MAX_NODES = 4500;
 enum Mode { push = 0, pull = 1 };
 
-void Controller(nid_t start, 
+void Controller(nid_t start_nid, 
     tapa::ostream<nid_t> &config_q, tapa::istream<offset_t> &ir_q
 ) {
-  config_q.write(start);
+  config_q.write(start_nid);
   config_q.close();
 
   Mode mode = Mode::push;
@@ -140,21 +140,20 @@ void DepthWriter(tapa::istream<nid_t> &update_q, tapa::mmap<depth_t> depth) {
 }
 
 void bfs_fpga(
-    nid_t start, nid_t num_nodes,
+    nid_t start_nid, nid_t num_nodes,
     tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
     tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
     tapa::mmap<depth_t> depth
 ) {
-  assert(num_nodes < MAX_NODES);
+  assert(num_nodes <= MAX_NODES);
   tapa::stream<nid_t, 1>    config_q;
   tapa::stream<nid_t, 8>    update_q;
   tapa::stream<offset_t, 1> ir_q;
 
   tapa::task()
-    .invoke(Controller, start, config_q, ir_q)
+    .invoke(Controller, start_nid, config_q, ir_q)
     .invoke<tapa::detach>(ProcessingElement, num_nodes, config_q, update_q, 
-        ir_q, push_index, push_neighbors, pull_index, pull_neighbors,
-        depth)
+        ir_q, push_index, push_neighbors, pull_index, pull_neighbors, depth)
     .invoke<tapa::detach>(DepthWriter, update_q, depth);
 }
 

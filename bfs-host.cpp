@@ -9,7 +9,7 @@
 #include <tapa.h>
 
 #include "graph.h"
-#include "bfs.h"
+#include "bfs-fpga.h"
 #include "bfs-cpu.h"
 #include "util.h"
 
@@ -82,7 +82,7 @@ int main(int argc, char *argv[]) {
 
   // Run and validate FPGA kernel.
   {
-    nid_t start = 0; // Arbitrary.
+    nid_t start_nid = 0; // Arbitrary.
     std::vector<depth_t> fpga_depths(pullG.num_nodes, INVALID_DEPTH);
 
     std::string bitstream;
@@ -91,7 +91,7 @@ int main(int argc, char *argv[]) {
     }
 
     tapa::invoke(
-        bfs_fpga, bitstream, start, pushG.num_nodes,
+        bfs_fpga, bitstream, start_nid, pushG.num_nodes,
         tapa::read_only_mmap<offset_t>(pushG.index),
         tapa::read_only_mmap<nid_t>(pushG.neighbors),
         tapa::read_only_mmap<offset_t>(pullG.index),
@@ -106,7 +106,7 @@ int main(int argc, char *argv[]) {
     });
 
     std::vector<depth_t> validation_depths(pushG.num_nodes, INVALID_DEPTH);
-    bfs_cpu_push(pushG, start, validation_depths);
+    bfs_cpu_push(pushG, start_nid, validation_depths);
 
     nid_t err_count = 0;
     for (nid_t u = 0; u < pushG.num_nodes; u++) {
