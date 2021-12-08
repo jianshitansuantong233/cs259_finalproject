@@ -18,15 +18,38 @@ struct Update {
   offset_t num_edges_explored;
 };
 
-void Controller(nid_t start_nid, 
-    tapa::ostream<nid_t> &config_q, tapa::istream<Update> &ir_q
+void Controller(const nid_t start_nid, const offset_t start_edge_count,
+    const nid_t num_nodes, offset_t edges_to_check,
+    tapa::ostream<nid_t> &config_q, tapa::istream<Update> &ir_q,
+    int alpha = 15, int beta = 18
 ) {
   config_q.write(start_nid);
   config_q.close();
 
+  Update update = {1, start_edge_count};
+  nid_t prev_num_nodes = 0;
+
   Mode mode = Mode::push;
   for (nid_t epoch = 0; epoch < MAX_EPOCHS; epoch++) {
-    Update update;
+    // Switch logic.
+    if (mode == Mode::pull and
+        (update.num_nodes > prev_num_nodes or update.num_nodes > num_nodes / beta)) {
+      // Remain in pull.
+      DEBUG(std::cout << "[controller] stay on pull" << std::endl);
+    } else if (update.num_edges_explored > edges_to_check / alpha) {
+      DEBUG(std::cout << "[controller] switch to pull" << std::endl);
+      mode = Mode::pull;
+    } else {
+      DEBUG(std::cout << "[controller] switch to push" << std::endl);
+      mode = Mode::push;
+    }
+    config_q.write(mode);
+    config_q.close();
+
+    // Update prev num node count.
+    prev_num_nodes = update.num_nodes;
+
+    // Get updates.
     TAPA_WHILE_NOT_EOT(ir_q) {
       update = ir_q.read(nullptr);
     }
@@ -37,12 +60,12 @@ void Controller(nid_t start_nid,
               << "Number edges explored: " << update.num_edges_explored 
               << std::endl);
 
-    // If no updates, the kernel is done!
+    // If no nodes have been updated, the kernel is done!
     if (update.num_nodes == 0) break;
 
-    // Hardcode direction for now.
-    config_q.write(PUSH_OR_PULL ? Mode::push : Mode::pull);
-    config_q.close();
+    // Update the number of edges explored this epoch.
+    if (mode == Mode::push)
+      edges_to_check -= update.num_edges_explored;
   }
 }
 
@@ -70,13 +93,23 @@ void ProcessingElement(
   update_q.close(); // End update stream.
 
   // First epoch is always push.
-  bool is_push = PUSH_OR_PULL;
+  bool     is_push;
   nid_t    num_nodes_updated;
   offset_t num_edges_explored;
 
   for (;;) {
     num_nodes_updated = 0;
     num_edges_explored = 0;
+
+    // Await configuration information.
+    TAPA_WHILE_NOT_EOT(config_q) {
+      auto dir = config_q.read(nullptr);
+      if (dir == Mode::push)  is_push = true;
+      else    /* Mode::pull */is_push = false;
+      DEBUG(std::cout << "Next direction: " << is_push << std::endl);
+    }
+    config_q.try_open(); // Reset stream.
+    DEBUG(std::cout << "Next epoch" << std::endl);
 
     if (is_push) { // PUSH
       for (nid_t u = 0; u < num_nodes; u++) {
@@ -98,6 +131,8 @@ void ProcessingElement(
         }
       }
     } else { // PULL
+      num_edges_explored = 1;
+
       for (nid_t v = 0; v < num_nodes; v++) {
         if (not Bitmap::get_bit(explored, v)) { // If not explored.
           for (offset_t off = pull_index[v]; off < pull_index[v + 1]; off++) {
@@ -125,16 +160,6 @@ void ProcessingElement(
     // Send update information to controller.
     ir_q.write({num_nodes_updated, num_edges_explored});
     ir_q.close();
-
-    // Await configuration information.
-    TAPA_WHILE_NOT_EOT(config_q) {
-      auto dir = config_q.read(nullptr);
-      if (dir == Mode::push)  is_push = true;
-      else    /* Mode::pull */is_push = false;
-      DEBUG(std::cout << "Next direction: " << is_push << std::endl);
-    }
-    config_q.try_open(); // Reset stream.
-    DEBUG(std::cout << "Next epoch" << std::endl);
   }
 }
 
@@ -155,7 +180,8 @@ void DepthWriter(tapa::istream<nid_t> &update_q, tapa::mmap<depth_t> depth) {
 }
 
 void bfs_fpga(
-    nid_t start_nid, nid_t num_nodes,
+    const nid_t start_nid, const offset_t start_degree, 
+    const nid_t num_nodes, const offset_t num_edges,
     tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
     tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
     tapa::mmap<depth_t> depth
@@ -166,7 +192,8 @@ void bfs_fpga(
   tapa::stream<Update, 1> ir_q;
 
   tapa::task()
-    .invoke(Controller, start_nid, config_q, ir_q)
+    .invoke(Controller, start_nid, start_degree, num_nodes, num_edges, 
+        config_q, ir_q, 15, 18)
     .invoke<tapa::detach>(ProcessingElement, num_nodes, config_q, update_q, 
         ir_q, push_index, push_neighbors, pull_index, pull_neighbors, depth)
     .invoke<tapa::detach>(DepthWriter, update_q, depth);

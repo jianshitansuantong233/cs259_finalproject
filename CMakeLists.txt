@@ -38,6 +38,7 @@ add_xocc_hw_link_targets(
 add_custom_target(
   swsim
   #COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_SOURCE_DIR}/graph.txt 512
+  #COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_SOURCE_DIR}/graphs/graph_scale7_degree4.txt 512
   COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_SOURCE_DIR}/graphs/graph_scale10_degree8.txt 512
   #COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_BINARY_DIR}/facebook.txt 512
   DEPENDS bfs)
