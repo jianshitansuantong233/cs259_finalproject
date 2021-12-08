@@ -82,7 +82,7 @@ int main(int argc, char *argv[]) {
 
   // Run and validate FPGA kernel.
   {
-    nid_t start_nid = 0; // Arbitrary.
+    nid_t start_nid = pullG.num_nodes / 8; // Arbitrary.
     std::vector<depth_t> fpga_depths(pullG.num_nodes, INVALID_DEPTH);
 
     std::string bitstream;
