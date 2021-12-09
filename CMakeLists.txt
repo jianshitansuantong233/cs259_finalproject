@@ -8,6 +8,7 @@ set(PLATFORM
 
 find_package(TAPA REQUIRED)
 find_package(SDx REQUIRED)
+add_compile_options(-g -ggdb)
 
 add_executable(bfs)
 target_sources(bfs PRIVATE bfs-host.cpp graph.cpp bfs-fpga.cpp bfs-cpu.cpp)
@@ -37,7 +38,7 @@ add_xocc_hw_link_targets(
 
 add_custom_target(
   swsim
-  #COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_SOURCE_DIR}/graph.txt 512
+  #COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_SOURCE_DIR}/graphs/graph.txt 512
   #COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_SOURCE_DIR}/graphs/graph_scale7_degree4.txt 512
   COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_SOURCE_DIR}/graphs/graph_scale10_degree8.txt 512
   #COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_BINARY_DIR}/facebook.txt 512
@@ -46,8 +47,9 @@ add_custom_target(
   hwsim
   COMMAND TAPAB=$<TARGET_PROPERTY:${hw_emu_xclbin},FILE_NAME> $<TARGET_FILE:bfs>
           #${CMAKE_CURRENT_SOURCE_DIR}/graph.txt
-          ${CMAKE_CURRENT_SOURCE_DIR}/graphs/graph_scale7_degree4.txt 512
-          #${CMAKE_CURRENT_BINARY_DIR}/facebook.txt
+          #${CMAKE_CURRENT_SOURCE_DIR}/graphs/graph_scale7_degree4.txt 512
+          #${CMAKE_CURRENT_SOURCE_DIR}/graphs/graph_scale10_degree8.txt 512
+          ${CMAKE_CURRENT_BINARY_DIR}/facebook.txt
   DEPENDS bfs ${hw_emu_xclbin})
 add_custom_target(
   hw
