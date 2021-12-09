@@ -91,7 +91,7 @@ int main(int argc, char *argv[]) {
     }
 
     tapa::invoke(
-        bfs_fpga, bitstream, start_nid, pushG.num_nodes,
+        bfs_fpga, bitstream, start_nid, pushG.num_nodes, pushG.num_edges,
         tapa::read_only_mmap<offset_t>(pushG.index),
         tapa::read_only_mmap<nid_t>(pushG.neighbors),
         tapa::read_only_mmap<offset_t>(pullG.index),
