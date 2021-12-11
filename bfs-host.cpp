@@ -13,9 +13,6 @@
 #include "bfs-cpu.h"
 #include "util.h"
 
-constexpr int      ALPHA            = 15;
-constexpr int      BETA             = 18;
-
 constexpr nid_t    PRINT_MAX_NODES  = 10;
 constexpr offset_t PRINT_MAX_EDGES  = 30;
 constexpr nid_t    PRINT_MAX_ERRORS = 10;
@@ -93,35 +90,17 @@ int main(int argc, char *argv[]) {
       bitstream = bitstream_ptr;
     }
 
-#ifdef CACHE_STATS
-    std::vector<offset_t> stats(2, 0);
-#endif // CACHE_STATS
+    // Resize push neighbors vector to align properly.
+    size_t new_size = (pushG.neighbors.size() + NEIGHBORS_CHUNK_SIZE - 1)
+                        / NEIGHBORS_CHUNK_SIZE * NEIGHBORS_CHUNK_SIZE;
+    pushG.neighbors.resize(new_size);
+
     tapa::invoke(
         bfs_fpga, bitstream, 
         start_nid, pushG.num_nodes, 
         tapa::read_only_mmap<offset_t>(pushG.index),
-        tapa::read_only_mmap<nid_t>(pushG.neighbors),
+        tapa::read_only_mmap<nid_t>(pushG.neighbors).reinterpret<bits<nid_vec_t>>(),
         tapa::read_write_mmap<depth_t>(fpga_depths));
-
-    //auto start_degree = pushG.index[start_nid + 1] - pushG.index[start_nid];
-    //tapa::invoke(
-        //bfs_fpga, bitstream, 
-        //start_nid, start_degree, pushG.num_nodes, pushG.num_edges,
-        //tapa::read_only_mmap<offset_t>(pushG.index),
-        //tapa::read_only_mmap<nid_t>(pushG.neighbors),
-        //tapa::read_only_mmap<offset_t>(pullG.index),
-        //tapa::read_only_mmap<nid_t>(pullG.neighbors),
-        //tapa::read_write_mmap<depth_t>(fpga_depths),
-//#ifdef CACHE_STATS
-        //tapa::read_write_mmap<nid_t>(stats),
-//#endif // CACHE_STATS
-        //ALPHA, BETA
-        //);
-
-#ifdef CACHE_STATS
-    std::cout << "Cache hits: " << stats[0] << " misses: " << stats[1]
-              << std::endl;
-#endif // CACHE_STATS
 
     DEBUG(
     if (pushG.num_nodes <= PRINT_MAX_NODES) {
