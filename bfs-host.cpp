@@ -90,7 +90,17 @@ int main(int argc, char *argv[]) {
       bitstream = bitstream_ptr;
     }
 
-    auto start_degree = pushG.index[start_nid + 1] - pushG.index[start_nid];
+    auto partition = partition_edges(&pushG, V_NUM_PARTITIONS);
+    auto index_es = std::get<0>(partition);
+    auto neighbors_es = std::get<1>(partition);
+    auto num_nodes = std::get<2>(partition);
+
+    DEBUG(
+    for (int i = 0; i < V_NUM_PARTITIONS; i++) {
+      std::cout << "Partition " << i << ": " << (num_nodes[i + 1] - num_nodes[i])
+                << " nodes and " << neighbors_es[i].size() << " edges" << std::endl;
+    });
+
     tapa::invoke(
         bfs_fpga, bitstream, 
         start_nid, start_degree, pushG.num_nodes, pushG.num_edges,
