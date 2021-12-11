@@ -1,5 +1,5 @@
 #define DEBUG_ON
-
+#define VERTEX_CENTRIC
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
   build_graphs(edge_list, &pushG, &pullG);
 
   // @Feiqian sort by parent node (i.e., edge (u, v) is sorted by ascending u).
-  std::sort(edge_list.begin(), edge_list.end(), AscendingChildNode);  
+  std::sort(edge_list.begin(), edge_list.end(), AscendingParentNode);  
 
   // Validate constructed edge list and graph.
   {
@@ -79,7 +79,7 @@ int main(int argc, char *argv[]) {
       }
     });
   }
-
+#ifdef VERTEX_CENTRIC
   // Run and validate FPGA kernel.
   {
     nid_t start_nid = pullG.num_nodes / 8; // Arbitrary.
@@ -129,6 +129,79 @@ int main(int argc, char *argv[]) {
     if (err_count != 0) return EXIT_FAILURE;
     else /* Success */  DEBUG(std::cout << "Validation success!" << std::endl);
   }
+#else
+  {
+    std::vector<Edge> e;
+    stream_ordered_edges(edge_list,  e);
+    std::vector<VertexAttr> vertices;    
+    // Start partition process
+    int size_of_graph = edge_list.size();
+    for(int i=0;i<size_of_graph;i++){
+      VertexAttr source;
+      VertexAttr dest;
+      source.index = e[i].first;
+      source.lock = 0;
+      dest.index = e[i].second;
+      dest.lock = 0;
+      vertices.push_back(source);
+      vertices.push_back(dest);
+    }
+    std::sort(vertices.begin(), vertices.end());  
+    for(int i=1;i!=vertices.size();i++){
+      if(vertices[i] == vertices[i-1]){
+        vertices.erase(vertices.begin()+i);
+        i--;
+      }
+    }
+    for(int i=0;i!=vertices.size();i++){
+      vertices[i]=0xFFFF_FFFF;
+    }
+    std::vector<uint32_t> num_edges;
+    std::vector<uint32_t> edge_offsets;
+    edge_offsets.push_back(0);
+    for(int i=1;i!=size_of_graph;i++){
+      if(e[i].src!=e[i-1].src){
+        edge_offsets.push_back(i);
+      }
+    }
+    for(int i=1;i<edge_offsets.size();i++){
+      num_edges.push_back(edge_offsets[i]-edge_offsets[i-1]);
+    }
+    num_edges.push_back(size_of_graph-edge_offsets[edge_offsets.size()-1]);
+    tapa::invoke(
+        bfs_fpga_edge, vertices.size(), tapa::read_only_mmap<const Eid> num_edges,
+        tapa::read_only_mmap<const Eid> edge_offsets, tapa::read_write_mmap<VertexAttr>(vertices), e);
+
+    DEBUG(
+    if (pushG.num_nodes <= PRINT_MAX_NODES) {
+      for (nid_t u = 0; u < pushG.num_nodes; u++)
+        std::cout << fpga_depths[u] << " ";
+      std::cout << std::endl;
+    });
+
+    std::vector<depth_t> validation_depths(pushG.num_nodes, INVALID_DEPTH);
+    bfs_cpu_push(pushG, start_nid, validation_depths);
+
+    nid_t err_count = 0;
+    for (nid_t u = 0; u < pushG.num_nodes; u++) {
+      if (fpga_depths[u] != validation_depths[u]) {
+        if (err_count < PRINT_MAX_ERRORS) {
+          DEBUG(std::cout << "[error] node " << u << " fpga depth (" 
+                          << fpga_depths[u] << ") != oracle depth ("
+                          << validation_depths[u] << ")" << std::endl);
+        }
+        err_count++;
+      }
+    }
+    if (err_count >= PRINT_MAX_ERRORS) {
+      DEBUG(std::cout << "[error] ... " << std::endl
+                      << "[error] and " << (err_count - PRINT_MAX_ERRORS)
+                      << " more errors" << std::endl);
+    }
+    if (err_count != 0) return EXIT_FAILURE;
+    else /* Success */  DEBUG(std::cout << "Validation success!" << std::endl);
+  }
+#endif
 
   return EXIT_SUCCESS;
 }
