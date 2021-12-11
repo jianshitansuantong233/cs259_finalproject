@@ -16,7 +16,7 @@ using std::ostream;
  * @param[inout] vertices       - vertices 
  * @param[in]    edges          - edges
  */
-void bfs_fpga_edge(Pid num_partitions, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
+void bfs_fpga_edge(Pid num_partitions, Pid start, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
                     tapa::mmap<bits<VertexAttr>> vertices, tapa::mmap<bits<Edge>> edges) {
   tapa::stream<Task, MAX_VER> task_stream("task_stream");
   tapa::stream<Edge, MAX_EDGE> edge_stream("non_active_edge_stream");
@@ -25,7 +25,7 @@ void bfs_fpga_edge(Pid num_partitions, tapa::mmap<const Eid> num_edges, tapa::mm
   Vid num_partition_vertices;
   Vid vertex_offset;
   tapa::task()
-      .invoke(Control, num_partitions, num_edges, edge_offsets, vertices, edges, task_stream);
+      .invoke(Control, num_partitions, start, num_edges, edge_offsets, vertices, edges, task_stream);
       .invoke(Scatter, edges, task_stream, update_stream)
       .invoke(Gather, num_partition_vertices, vertex_offset, partition_vertices,
               update_stream, gathered_stream)
@@ -38,12 +38,13 @@ void bfs_fpga_edge(Pid num_partitions, tapa::mmap<const Eid> num_edges, tapa::mm
  * @param[in]  vertices      - vertices, grabbed directly from DRAM. TODO: optimize it using prefetch & cache.
  * @param[out] updates       - temporary update tuples
  */
-void Control(Pid num_partitions, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
+void Control(Pid num_partitions, Pid start, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
             tapa::mmap<bits<VertexAttr>> vertices, tapa::mmap<bits<Edge>> edges, 
             tapa::ostream<bits<Task>>& task_stream){
     int num_done = 0;// processed partitions
-    bool done[MAX_VER];
-    bool active[MAX_VER];
+    bool done[MAX_VER] = {};
+    bool active[MAX_VER] = {};
+    active[start] = true;
     while(num_done!=num_partitions){
         // do scatter
         for(int i=0;i<num_partitions;i++){

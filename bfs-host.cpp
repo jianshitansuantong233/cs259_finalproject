@@ -174,7 +174,7 @@ int main(int argc, char *argv[]) {
     }
     num_edges.push_back(size_of_graph-edge_offsets[edge_offsets.size()-1]);
     tapa::invoke(
-        bfs_fpga_edge, vertices.size(), tapa::read_only_mmap<const Eid> num_edges,
+        bfs_fpga_edge, vertices.size(), pullG.num_nodes / 8 /*start index*/, tapa::read_only_mmap<const Eid> num_edges,
         tapa::read_only_mmap<const Eid> edge_offsets, tapa::read_write_mmap<VertexAttr>(vertices), e);
 
     DEBUG(
