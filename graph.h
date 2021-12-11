@@ -4,6 +4,9 @@
 #include <cstdint>
 #include <istream>
 #include <vector>
+// For edge-centric
+#include <tapa.h>
+#include <ap_int.h>
 
 // Base types.
 using nid_t       = uint32_t;
@@ -11,7 +14,37 @@ using offset_t    = nid_t;
 using edge_t      = std::pair<nid_t, nid_t>;
 using edge_list_t = std::vector<edge_t>;
 using depth_t     = int;
+// Base types for Edge-centric
+const int PARTITION_NUM = 2; //should be sizeof(BRAM)/sizeof(edge+vertex)
+const int MAX_EDGE = 1024;
+const int MAX_VER = 100000;
+template <typename T>
+using bits = ap_uint<tapa::widthof<T>()>;
 
+using Vid = uint32_t;
+using Eid = uint32_t;
+using Pid = uint32_t;
+
+using VertexAttr = Vid;
+
+struct Edge {
+  Vid src;
+  Vid dst;
+};
+
+struct Update_edge_version {
+  Vid dst;
+  Vid depth;
+};
+struct Task{
+  Eid start_position;
+  Eid num_edges;
+  VertexAttr depth;
+};
+struct Resp{
+  Vid v;
+  bool finished;
+};
 // Invalid depth.
 constexpr depth_t INVALID_DEPTH = -1;
 
@@ -39,19 +72,7 @@ using PullGraph = CompressedGraph;
  */
 edge_list_t load_edgelist(std::istream &in);
 
-/*
- * Implementing using tapa, uncomment these
-#include <tapa.h>
-void stream_ordered_edges(edge_list_t e, tapa::ostream<bits<Edge>> s){
-  for(int i=0;i<e.length();i++){
-    Edge temp;
-    temp.src = e[i].first;
-    temp.dst = e[i].second;
-    s.write(temp);
-  }
-}
 
-*/
 /**
  * Constructs CSR and CSC graphs from an edge list.
  * Parmeters:
@@ -76,5 +97,6 @@ struct {
       (e1.second == e2.second and e1.first < e2.first);
   }
 } AscendingChildNode;
+
 
 #endif // GRAPH_H

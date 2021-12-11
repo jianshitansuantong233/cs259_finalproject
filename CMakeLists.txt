@@ -13,7 +13,7 @@ find_package(SDx REQUIRED)
 #add_link_options(-fsanitize=address)
 
 add_executable(bfs)
-target_sources(bfs PRIVATE bfs-host.cpp graph.cpp bfs-fpga.cpp bfs-cpu.cpp)
+target_sources(bfs PRIVATE bfs-host.cpp graph.cpp bfs-fpga.cpp bfs-edge.cpp bfs-cpu.cpp)
 target_link_libraries(bfs PRIVATE tapa::tapa)
 file(
   DOWNLOAD "https://snap.stanford.edu/data/facebook_combined.txt.gz"

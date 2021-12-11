@@ -10,11 +10,12 @@ Use the `Vitis 2020.02` image.
 
 Install TAPA with
 ```bash
-sudo apt install ca-certificates
-```
-```bash
 curl -L git.io/JnERa | bash
 ```
+```bash
+sudo apt install ca-certificates
+```
+
 Certificates are reinstalled due to a faulty base image.
 
 Setup TAPA environment
