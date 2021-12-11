@@ -9,39 +9,9 @@
 
 constexpr nid_t MAX_NODES = 1 << 13; // 2^{13} = 8,192
 
-void NeighborsLoader(
-    tapa::istream<nid_t> &node_req_q, tapa::ostream<nid_t> &neighbors_resp_q,
-    tapa::mmap<offset_t> index, tapa::mmap<bits<nid_vec_t>> neighbors
-) {
-  TAPA_WHILE_NOT_EOT(node_req_q) {
-    nid_t v = node_req_q.read(nullptr);
-
-    offset_t start = index[v];
-    offset_t end = index[v + 1];
-    offset_t v_start = start / NEIGHBORS_CHUNK_SIZE;
-    offset_t v_end = (end + NEIGHBORS_CHUNK_SIZE - 1) / NEIGHBORS_CHUNK_SIZE;
-
-    chunk_read:
-    for (offset_t chunk_idx = v_start; chunk_idx < v_end; chunk_idx++) {
-#pragma HLS pipeline
-      const nid_vec_t chunk =
-        tapa::bit_cast<nid_vec_t>(neighbors[chunk_idx]);
-      offset_t chunk_start = chunk_idx * NEIGHBORS_CHUNK_SIZE;
-
-      chunk_elem_read:
-      for (size_t i = std::max(0, start - chunk_start);
-          i < std::min(NEIGHBORS_CHUNK_SIZE, end - chunk_start); i++) {
-#pragma HLS pipeline
-        neighbors_resp_q.write(chunk[i]);
-      }
-    }
-    neighbors_resp_q.close();
-  }
-}
-
 void ProcessingElement(
     const nid_t num_nodes, const nid_t start_nid,
-    tapa::ostream<nid_t> &node_req_q, tapa::istream<nid_t> &neighbors_resp_q,
+    tapa::mmap<offset_t> index, tapa::mmap<nid_t> neighbors,
     tapa::ostream<nid_t> &update_q
 ) {
   Bitmap::bitmap_t frontier[Bitmap::bitmap_size(MAX_NODES)];
@@ -67,12 +37,11 @@ void ProcessingElement(
 #pragma HLS pipeline
       if (Bitmap::get_bit(frontier, u)) {
         DEBUG(std::cout << "[Push] node " << u << ": ");
-        node_req_q.write(u);
 
         push_neis:
-        TAPA_WHILE_NOT_EOT(neighbors_resp_q) {
+        for (offset_t off = index[u]; off < index[u + 1]; off++) {
 #pragma HLS pipeline
-          nid_t v = neighbors_resp_q.read(nullptr);
+          nid_t v = neighbors[off];
           if (not Bitmap::get_bit(explored, v)) { // If child not explored.
             DEBUG(std::cout << v << " ");
             Bitmap::set_bit(explored, v);
@@ -81,7 +50,6 @@ void ProcessingElement(
             num_updates++;
           }
         }
-        neighbors_resp_q.try_open(); // Reset stream.
         DEBUG(std::cout << std::endl);
       }
     }
@@ -109,7 +77,7 @@ void DepthWriter(tapa::istream<nid_t> &update_q, tapa::mmap<depth_t> depth) {
 
 void bfs_fpga(
     const nid_t start_nid, const nid_t num_nodes,
-    tapa::mmap<offset_t> push_index, tapa::mmap<bits<nid_vec_t>> push_neighbors,
+    tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
     tapa::mmap<depth_t> depths
 ) {
   assert(num_nodes <= MAX_NODES);
@@ -119,8 +87,6 @@ void bfs_fpga(
 
   tapa::task()
     .invoke(ProcessingElement, num_nodes, start_nid, 
-        node_req_q, neighbors_resp_q, update_q)
-    .invoke<tapa::detach>(NeighborsLoader, node_req_q, neighbors_resp_q,
-        push_index, push_neighbors)
+        push_index, push_neighbors, update_q)
     .invoke<tapa::detach>(DepthWriter, update_q, depths);
 }
