@@ -32,7 +32,7 @@ struct Edge {
   Vid dst;
 };
 
-struct Update {
+struct Update_edge_version {
   Vid dst;
   Vid depth;
 };

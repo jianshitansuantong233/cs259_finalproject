@@ -20,8 +20,8 @@ void bfs_fpga_edge(Pid num_partitions, tapa::mmap<const Eid> num_edges, tapa::mm
                     tapa::mmap<bits<VertexAttr>> vertices, tapa::mmap<bits<Edge>> edges) {
   tapa::stream<Task, MAX_VER> task_stream("task_stream");
   tapa::stream<Edge, MAX_EDGE> edge_stream("non_active_edge_stream");
-  tapa::stream<Update, MAX_EDGE> update_stream("update_stream");
-  tapa::stream<Update, MAX_EDGE> gathered_stream("gathered_stream");
+  tapa::stream<Update_edge_version, MAX_EDGE> update_stream("update_stream");
+  tapa::stream<Update_edge_version, MAX_EDGE> gathered_stream("gathered_stream");
   Vid num_partition_vertices;
   Vid vertex_offset;
   tapa::task()
@@ -69,12 +69,12 @@ void Control(Pid num_partitions, tapa::mmap<const Eid> num_edges, tapa::mmap<con
  * @param[in]  task_stream   - information about updates to be made
  * @param[out] updates       - temporary update tuples
  */
-void Scatter(tapa::mmap<bits<Edge>> edges, tapa::istream<bits<Task>>& task_stream, tapa::ostream<bits<Update>>& updates){
+void Scatter(tapa::mmap<bits<Edge>> edges, tapa::istream<bits<Task>>& task_stream, tapa::ostream<bits<Update_edge_version>>& updates){
     TAPA_WHILE_NOT_EOT(task_stream) {
         Task t = task_stream.read();
         std::cout <<"Processing task: src "<<t.start_position<<", num "<<t.num_edges<<" source depth "<<t.depth<<std::endl;
         for(int i=0;i<t.num_edges;i++){
-            Update u;
+            Update_edge_version u;
             Edge e = edges[t.start_position+i];
             u.dst = e.dst;
             u.depth = vertices[t.depth]+1;
@@ -91,9 +91,9 @@ void Scatter(tapa::mmap<bits<Edge>> edges, tapa::istream<bits<Task>>& task_strea
  * @param[in] temp_updates       - temporary update tuples
  * @param[out] updates           - final update tuples
  */
-void Gather(tapa::istream<bits<Update>>& temp_updates, tapa::mmap<bits<VertexAttr>> vertices){
+void Gather(tapa::istream<bits<Update_edge_version>>& temp_updates, tapa::mmap<bits<VertexAttr>> vertices){
     TAPA_WHILE_NOT_EOT(temp_updates) {
-        Update u = temp_updates.read();
+        Update_edge_version u = temp_updates.read();
         std::cout <<"Processing update "<<u.dst<<", "<<u.depth<<std::endl;
         vertices[u.dst] = vertices[u.dst]>u.depth? u.depth:vertices[u.dst];
     }
@@ -111,7 +111,7 @@ void Gather(tapa::istream<bits<Update>>& temp_updates, tapa::mmap<bits<VertexAtt
 void bfs_edge_cpu(const Vid num_vertices, const Eid num_edges, std::vector<VertexAttr>& vertices,
          edge_list_t edges) {
     for(int i=0;i<num_edges;i++){
-        Update u;
+        Update_edge_version u;
         u.dst = edge.dst;
         u.depth = vertices[edge.src]+1;
         auto v_temp = u.dst;
