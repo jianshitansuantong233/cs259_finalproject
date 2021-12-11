@@ -13,6 +13,9 @@
 #include "bfs-cpu.h"
 #include "util.h"
 
+constexpr int      ALPHA            = 15;
+constexpr int      BETA             = 18;
+
 constexpr nid_t    PRINT_MAX_NODES  = 10;
 constexpr offset_t PRINT_MAX_EDGES  = 30;
 constexpr nid_t    PRINT_MAX_ERRORS = 10;
@@ -90,25 +93,35 @@ int main(int argc, char *argv[]) {
       bitstream = bitstream_ptr;
     }
 
-    auto partition = partition_edges(&pushG, V_NUM_PARTITIONS);
-    auto index_es = std::get<0>(partition);
-    auto neighbors_es = std::get<1>(partition);
-    auto num_nodes = std::get<2>(partition);
-
-    DEBUG(
-    for (int i = 0; i < V_NUM_PARTITIONS; i++) {
-      std::cout << "Partition " << i << ": " << (num_nodes[i + 1] - num_nodes[i])
-                << " nodes and " << neighbors_es[i].size() << " edges" << std::endl;
-    });
-
+#ifdef CACHE_STATS
+    std::vector<offset_t> stats(2, 0);
+#endif // CACHE_STATS
     tapa::invoke(
         bfs_fpga, bitstream, 
-        start_nid, start_degree, pushG.num_nodes, pushG.num_edges,
+        start_nid, pushG.num_nodes, 
         tapa::read_only_mmap<offset_t>(pushG.index),
         tapa::read_only_mmap<nid_t>(pushG.neighbors),
-        tapa::read_only_mmap<offset_t>(pullG.index),
-        tapa::read_only_mmap<nid_t>(pullG.neighbors),
         tapa::read_write_mmap<depth_t>(fpga_depths));
+
+    //auto start_degree = pushG.index[start_nid + 1] - pushG.index[start_nid];
+    //tapa::invoke(
+        //bfs_fpga, bitstream, 
+        //start_nid, start_degree, pushG.num_nodes, pushG.num_edges,
+        //tapa::read_only_mmap<offset_t>(pushG.index),
+        //tapa::read_only_mmap<nid_t>(pushG.neighbors),
+        //tapa::read_only_mmap<offset_t>(pullG.index),
+        //tapa::read_only_mmap<nid_t>(pullG.neighbors),
+        //tapa::read_write_mmap<depth_t>(fpga_depths),
+//#ifdef CACHE_STATS
+        //tapa::read_write_mmap<nid_t>(stats),
+//#endif // CACHE_STATS
+        //ALPHA, BETA
+        //);
+
+#ifdef CACHE_STATS
+    std::cout << "Cache hits: " << stats[0] << " misses: " << stats[1]
+              << std::endl;
+#endif // CACHE_STATS
 
     DEBUG(
     if (pushG.num_nodes <= PRINT_MAX_NODES) {
@@ -124,20 +137,20 @@ int main(int argc, char *argv[]) {
     for (nid_t u = 0; u < pushG.num_nodes; u++) {
       if (fpga_depths[u] != validation_depths[u]) {
         if (err_count < PRINT_MAX_ERRORS) {
-          DEBUG(std::cout << "[error] node " << u << " fpga depth (" 
-                          << fpga_depths[u] << ") != oracle depth ("
-                          << validation_depths[u] << ")" << std::endl);
+          std::cerr << "[error] node " << u << " fpga depth (" 
+                    << fpga_depths[u] << ") != oracle depth ("
+                    << validation_depths[u] << ")" << std::endl;
         }
         err_count++;
       }
     }
     if (err_count >= PRINT_MAX_ERRORS) {
-      DEBUG(std::cout << "[error] ... " << std::endl
-                      << "[error] and " << (err_count - PRINT_MAX_ERRORS)
-                      << " more errors" << std::endl);
+      std::cerr << "[error] ... " << std::endl
+                << "[error] and " << (err_count - PRINT_MAX_ERRORS)
+                << " more errors" << std::endl;
     }
     if (err_count != 0) return EXIT_FAILURE;
-    else /* Success */  DEBUG(std::cout << "Validation success!" << std::endl);
+    else /* Success */  std::cout << "Validation success!" << std::endl;
   }
 #else
   {

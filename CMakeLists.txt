@@ -8,7 +8,9 @@ set(PLATFORM
 
 find_package(TAPA REQUIRED)
 find_package(SDx REQUIRED)
-add_compile_options(-g -ggdb)
+# DEBUG: use fsanitize for memory issues.
+#add_compile_options(-fsanitize=address)
+#add_link_options(-fsanitize=address)
 
 add_executable(bfs)
 #target_sources(bfs PRIVATE bfs-host.cpp graph.cpp bfs-fpga.cpp bfs-edge.cpp bfs-cpu.cpp)
@@ -41,8 +43,8 @@ add_custom_target(
   swsim
   #COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_SOURCE_DIR}/graphs/graph.txt 512
   #COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_SOURCE_DIR}/graphs/graph_scale7_degree4.txt 512
-  COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_SOURCE_DIR}/graphs/graph_scale10_degree8.txt 512
-  #COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_BINARY_DIR}/facebook.txt 512
+  #COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_SOURCE_DIR}/graphs/graph_scale10_degree8.txt 512
+  COMMAND $<TARGET_FILE:bfs> ${CMAKE_CURRENT_BINARY_DIR}/facebook.txt 512
   DEPENDS bfs)
 add_custom_target(
   hwsim
