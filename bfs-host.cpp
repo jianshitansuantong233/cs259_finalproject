@@ -100,8 +100,8 @@ int main(int argc, char *argv[]) {
 
     DEBUG(
     for (int i = 0; i < V_NUM_PARTITIONS; i++) {
-      std::cout << "Partition " << i << ": " << num_nodes[i] << " nodes and "
-                << neighbors_es[i].size() << " edges" << std::endl;
+      std::cout << "Partition " << i << ": " << (num_nodes[i + 1] - num_nodes[i])
+                << " nodes and " << neighbors_es[i].size() << " edges" << std::endl;
     });
 
     tapa::invoke(
