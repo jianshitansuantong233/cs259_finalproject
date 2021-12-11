@@ -1,5 +1,8 @@
 #define DEBUG_ON
 #define VERTEX_CENTRIC
+
+constexpr int NUM_PARTITIONS = 2;
+
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
@@ -90,16 +93,22 @@ int main(int argc, char *argv[]) {
       bitstream = bitstream_ptr;
     }
 
-    // Resize push neighbors vector to align properly.
-    size_t new_size = (pushG.neighbors.size() + NEIGHBORS_CHUNK_SIZE - 1)
-                        / NEIGHBORS_CHUNK_SIZE * NEIGHBORS_CHUNK_SIZE;
-    pushG.neighbors.resize(new_size);
+    auto partition = partition_edges(&pushG, V_NUM_PARTITIONS);
+    auto index_es = std::get<0>(partition);
+    auto neighbors_es = std::get<1>(partition);
+    auto num_nodes = std::get<2>(partition);
+
+    DEBUG(
+    for (int i = 0; i < V_NUM_PARTITIONS; i++) {
+      std::cout << "Partition " << i << ": " << num_nodes[i] << " nodes and "
+                << neighbors_es[i].size() << " edges" << std::endl;
+    });
 
     tapa::invoke(
         bfs_fpga, bitstream, 
         start_nid, pushG.num_nodes, 
         tapa::read_only_mmap<offset_t>(pushG.index),
-        tapa::read_only_mmap<nid_t>(pushG.neighbors).reinterpret<bits<nid_vec_t>>(),
+        tapa::read_only_mmap<nid_t>(pushG.neighbors),
         tapa::read_write_mmap<depth_t>(fpga_depths));
 
     DEBUG(
