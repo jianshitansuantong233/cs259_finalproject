@@ -74,7 +74,6 @@ void stream_ordered_edges(edge_list_t e, std::vector<Edge> s, Vid start_id){
     Edge temp;
     temp.src = e[i].first;
     temp.dst = e[i].second;
-    temp.active = (e[i].first==start_id);
     s.push_back(temp);
   }
 }
@@ -104,10 +103,5 @@ struct {
   }
 } AscendingChildNode;
 
-struct {
-  bool operator()(const VertexAttr &v1, const VertexAttr &v2) const{
-    return v1.index < v2.index;
-  }
-} VertexSetSort;
 
 #endif // GRAPH_H
