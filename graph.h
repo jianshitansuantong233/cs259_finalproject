@@ -41,7 +41,10 @@ struct Task{
   Eid num_edges;
   VertexAttr depth;
 };
-
+struct Resp{
+  Vid v;
+  bool finished;
+};
 // Invalid depth.
 constexpr depth_t INVALID_DEPTH = -1;
 

@@ -1,5 +1,5 @@
 #define DEBUG_ON
-#define VERTEX_CENTRIC
+#define EDGE_CENTRIC
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
@@ -131,6 +131,7 @@ int main(int argc, char *argv[]) {
   }
 #else
   {
+    nid_t start_nid = pullG.num_nodes / 8;
     std::vector<Edge> e;
     for(int i=0;i<edge_list.size();i++){
       Edge temp;
@@ -144,10 +145,8 @@ int main(int argc, char *argv[]) {
     for(int i=0;i<size_of_graph;i++){
       VertexAttr source;
       VertexAttr dest;
-      source.index = e[i].first;
-      source.lock = 0;
-      dest.index = e[i].second;
-      dest.lock = 0;
+      source = e[i].src;
+      dest = e[i].dst;
       vertices.push_back(source);
       vertices.push_back(dest);
     }
@@ -159,8 +158,9 @@ int main(int argc, char *argv[]) {
       }
     }
     for(int i=0;i!=vertices.size();i++){
-      vertices[i]=0xFFFF_FFFF;
+      vertices[i]=0xFFFFFFFF;
     }
+    vertices[pullG.num_nodes / 8] = 0;/*start index*/
     std::vector<uint32_t> num_edges;
     std::vector<uint32_t> edge_offsets;
     edge_offsets.push_back(0);
@@ -173,14 +173,18 @@ int main(int argc, char *argv[]) {
       num_edges.push_back(edge_offsets[i]-edge_offsets[i-1]);
     }
     num_edges.push_back(size_of_graph-edge_offsets[edge_offsets.size()-1]);
+    std::string bitstream;
+    if (const auto bitstream_ptr = getenv("TAPAB")) {
+      bitstream = bitstream_ptr;
+    }
     tapa::invoke(
-        bfs_fpga_edge, vertices.size(), pullG.num_nodes / 8 /*start index*/, tapa::read_only_mmap<const Eid> num_edges,
-        tapa::read_only_mmap<const Eid> edge_offsets, tapa::read_write_mmap<VertexAttr>(vertices), e);
+        bfs_fpga_edge, bitstream, vertices.size(), pullG.num_nodes / 8 /*start index*/, tapa::read_only_mmap<const Eid>(num_edges),
+        tapa::read_only_mmap<const Eid>(edge_offsets), tapa::read_write_mmap<VertexAttr>(vertices), tapa::read_only_mmap<Edge>(e).reinterpret<bits<Edge>>());
 
     DEBUG(
     if (pushG.num_nodes <= PRINT_MAX_NODES) {
       for (nid_t u = 0; u < pushG.num_nodes; u++)
-        std::cout << fpga_depths[u] << " ";
+        std::cout << vertices[u] << " ";
       std::cout << std::endl;
     });
 
@@ -189,10 +193,10 @@ int main(int argc, char *argv[]) {
 
     nid_t err_count = 0;
     for (nid_t u = 0; u < pushG.num_nodes; u++) {
-      if (fpga_depths[u] != validation_depths[u]) {
+      if (vertices[u] != validation_depths[u]) {
         if (err_count < PRINT_MAX_ERRORS) {
           DEBUG(std::cout << "[error] node " << u << " fpga depth (" 
-                          << fpga_depths[u] << ") != oracle depth ("
+                          << vertices[u] << ") != oracle depth ("
                           << validation_depths[u] << ")" << std::endl);
         }
         err_count++;

@@ -18,5 +18,5 @@ void bfs_fpga(
     tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
     tapa::mmap<depth_t> depth);
 void bfs_fpga_edge(Pid num_partitions, Pid start, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
-                    tapa::mmap<bits<VertexAttr>> vertices, tapa::mmap<bits<Edge>> edges);
+                    tapa::mmap<VertexAttr> vertices, tapa::mmap<bits<Edge>> edges);
 #endif  // BFS_FPGA_H
