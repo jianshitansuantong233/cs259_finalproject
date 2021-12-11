@@ -9,7 +9,7 @@
 #include <ap_int.h>
 
 // Base types.
-using nid_t       = uint32_t;
+using nid_t       = int32_t;
 using offset_t    = nid_t;
 using edge_t      = std::pair<nid_t, nid_t>;
 using edge_list_t = std::vector<edge_t>;
