@@ -127,10 +127,9 @@ partition_edges(PushGraph * const g, int num_partitions) {
     start = end;
   }
 
-  std::vector<nid_t> num_nodes(num_partitions + 1);
-  num_nodes[0] = 0;
+  std::vector<nid_t> num_nodes(num_partitions);
   for (int i = 0; i < num_partitions; i++)
-    num_nodes[i + 1] = num_nodes[i] + index_es[i].size() - 1;
+    num_nodes[i] = index_es[i].size() - 1;
 
   return std::make_tuple(index_es, neighbors_es, num_nodes);
 }
