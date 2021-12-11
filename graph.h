@@ -69,14 +69,6 @@ using PullGraph = CompressedGraph;
  */
 edge_list_t load_edgelist(std::istream &in);
 
-void stream_ordered_edges(edge_list_t e, std::vector<Edge> s, Vid start_id){
-  for(int i=0;i<e.size();i++){
-    Edge temp;
-    temp.src = e[i].first;
-    temp.dst = e[i].second;
-    s.push_back(temp);
-  }
-}
 
 /**
  * Constructs CSR and CSC graphs from an edge list.

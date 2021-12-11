@@ -132,7 +132,12 @@ int main(int argc, char *argv[]) {
 #else
   {
     std::vector<Edge> e;
-    stream_ordered_edges(edge_list,  e);
+    for(int i=0;i<edge_list.size();i++){
+      Edge temp;
+      temp.src = edge_list[i].first;
+      temp.dst = edge_list[i].second;
+      e.push_back(temp);
+    }
     std::vector<VertexAttr> vertices;    
     // Start partition process
     int size_of_graph = edge_list.size();
