@@ -1,11 +1,3 @@
-//#define DEBUG_ON
-//#define CACHE_STATS
-#ifdef CACHE_STATS
-#define DEBUG_CACHE(block) do { block; } while(false)
-#else
-#define DEBUG_CACHE(block)
-#endif // CACHE_STATS
-
 #include "bfs-fpga.h"
 
 #include <algorithm>
@@ -15,8 +7,14 @@
 #include "util.h"
 #include "limits.h"
 
-constexpr offset_t EDGE_CACHE_SIZE = 1 << 14; // 2^{20} = 1M
-constexpr nid_t    CACHE_LINE_SIZE = 1 << 8; // Number of edges in each cache-line.
+#ifdef CACHE_STATS
+#define DEBUG_CACHE(block) do { block; } while(false)
+#else
+#define DEBUG_CACHE(block)
+#endif // CACHE_STATS
+
+constexpr offset_t EDGE_CACHE_SIZE = 1 << 16; // 2^{20} = 1M
+constexpr nid_t    CACHE_LINE_SIZE = 1 << 0; // Number of edges in each cache-line.
 constexpr offset_t NUM_CACHE_LINES = EDGE_CACHE_SIZE / CACHE_LINE_SIZE;
 constexpr nid_t    MAX_EPOCHS      = 100;
 constexpr nid_t    MAX_NODES       = 1 << 13; // 2^{13} = 8,192
@@ -34,7 +32,7 @@ struct Update {
 void Controller(const nid_t start_nid, const offset_t start_edge_count,
     const nid_t num_nodes, offset_t edges_to_check,
     tapa::ostream<nid_t> &config_q, tapa::istream<Update> &ir_q,
-    int alpha = 15, int beta = 18
+    const int alpha, const int beta
 ) {
   config_q.write(start_nid);
   config_q.close();
@@ -82,35 +80,39 @@ void Controller(const nid_t start_nid, const offset_t start_edge_count,
   }
 }
 
+*
+ A cache-line consists of the address it points to and the elements
+ contained in this cache-line.
 struct CacheLine {
   offset_t addr;
   nid_t values[CACHE_LINE_SIZE];
 };
 
-#define CL_HASH(addr) (addr & (NUM_CACHE_LINES - 1))
 #ifdef CACHE_STATS
-#define CL_FETCH_OR_MISS(cl, cl_addr, num_edges, neighbors_cache, pull_neighbors) ({\
+#define CL_FETCH_OR_MISS(cl, cl_addr, num_edges, cache, neighbors) ({\
+    /* entry = cl_addr % NUM_CACHE_LINES */\
     offset_t entry = (cl_addr) & (NUM_CACHE_LINES - 1);\
-    if ((cl = neighbors_cache[entry]).addr != (cl_addr)) {\
+    if ((cl = cache[entry]).addr != (cl_addr)) {\
       miss++;\
       cl.addr = (cl_addr);\
       for (offset_t i = (cl_addr); \
           i < min((cl_addr) + CACHE_LINE_SIZE, (num_edges)); i++)\
-        cl.values[i - (cl_addr)] = pull_neighbors[i];\
-      neighbors_cache[entry] = cl;\
+        cl.values[i - (cl_addr)] = neighbors[i];\
+      cache[entry] = cl;\
     } else {\
       hit++;\
     }\
 })
 #else
-#define CL_FETCH_OR_MISS(cl, cl_addr, num_edges, neighbors_cache, pull_neighbors) ({\
+#define CL_FETCH_OR_MISS(cl, cl_addr, num_edges, cache, neighbors) ({\
+    /* entry = cl_addr % NUM_CACHE_LINES */\
     offset_t entry = (cl_addr) & (NUM_CACHE_LINES - 1);\
-    if ((cl = neighbors_cache[entry]).addr != (cl_addr)) {\
+    if ((cl = cache[entry]).addr != (cl_addr)) {\
       cl.addr = (cl_addr);\
       for (offset_t i = (cl_addr); \
           i < min((cl_addr) + CACHE_LINE_SIZE, (num_edges)); i++)\
-        cl.values[i - (cl_addr)] = pull_neighbors[i];\
-      neighbors_cache[entry] = cl;\
+        cl.values[i - (cl_addr)] = neighbors[i];\
+      cache[entry] = cl;\
     }\
 })
 #endif // CACHE_STATS
@@ -118,11 +120,16 @@ struct CacheLine {
 void PullNeighborsCache(
     const offset_t num_edges,
     tapa::istream<nid_t> &nodes_q, tapa::ostream<nid_t> &neighbors_q,
+    tapa::istream<nid_t> &early_term_q,
     tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors
+#ifdef CACHE_STATS
+    , tapa::mmap<offset_t> stats
+#endif // CACHE_STATS
 ) {
+  DEBUG_CACHE(
   std::cout << "num cl:    " << NUM_CACHE_LINES << std::endl
             << "num edges: " << EDGE_CACHE_SIZE << std::endl
-            << "cl size:   " << CACHE_LINE_SIZE << std::endl;
+            << "cl size:   " << CACHE_LINE_SIZE << std::endl);
   CacheLine neighbors_cache[NUM_CACHE_LINES];
 #pragma HLS resource variable neighbors_cache core=XPM_MEMORY uram
 
@@ -130,7 +137,7 @@ void PullNeighborsCache(
     neighbors_cache[i].addr = UINT_MAX;
 
 #ifdef CACHE_STATS
-  size_t hit, miss;
+  offset_t hit, miss;
   hit = miss = 0;
 #endif // CACHE_STATS
 
@@ -146,7 +153,7 @@ void PullNeighborsCache(
                     << std::endl);
     DEBUG(std::cout << "[PullNeighborsCache] start: " << start 
                     << " end: " << end << std::endl
-                    << "                       cl_start: " << cl_start
+                    << "                     cl_start: " << cl_start
                     << " cl_end: " << cl_end << std::endl);
     
     // If there's no neighbors, no work to be done.
@@ -158,34 +165,52 @@ void PullNeighborsCache(
         nid_t cl_start_idx = start - cl_start;
         for (nid_t i = cl_start_idx; 
             i < min(CACHE_LINE_SIZE, cl_start_idx + end - start); i++) {
-          DEBUG(std::cout << "[PullNeighborsCache] " << i << ": ");
-          DEBUG(std::cout << cl.values[i] << std::endl);
+          DEBUG(std::cout << "[PullNeighborsCache] " << i << ": "
+                          << cl.values[i] << std::endl);
           neighbors_q.write(cl.values[i]);
         }
       }
 
+      bool terminate = false;
+      // Flush previous early terminates.
+      early_flush:
+      while (not early_term_q.empty()) {
+        nid_t early_v = early_term_q.read(nullptr);
+        if (early_v == v) terminate = true;
+      }
+
+      if (not terminate) {
+      fetch_middle_neighbors:
       for (offset_t addr = cl_start + CACHE_LINE_SIZE; 
           addr < cl_end - CACHE_LINE_SIZE; addr += CACHE_LINE_SIZE
       ) {
 #pragma HLS pipeline
+        if (not early_term_q.empty()) {
+          DEBUG(std::cout << "[PullNeighborsCache] received early terminate!" 
+                          << std::endl);
+          terminate = true;
+          early_term_q.read(nullptr);
+          break;
+        }
 
         CacheLine cl;
         CL_FETCH_OR_MISS(cl, addr, num_edges, neighbors_cache, pull_neighbors);
         for (nid_t i = 0; i < CACHE_LINE_SIZE; i++) {
-          DEBUG(std::cout << "[PullNeighborsCache] " << i << ": ");
-          DEBUG(std::cout << cl.values[i] << std::endl);
+          DEBUG(std::cout << "[PullNeighborsCache] " << i << ": "
+                          << cl.values[i] << std::endl);
           neighbors_q.write(cl.values[i]);
         }
       }
+      }
 
       // For last entry.
-      if (cl_start + CACHE_LINE_SIZE != cl_end) {
+      if (not terminate and cl_start + CACHE_LINE_SIZE != cl_end) {
         CacheLine cl;
         CL_FETCH_OR_MISS(cl, cl_end - CACHE_LINE_SIZE, 
             num_edges, neighbors_cache, pull_neighbors);
         for (nid_t i = 0; i < CACHE_LINE_SIZE - (cl_end - end); i++) {
-          DEBUG(std::cout << "[PullNeighborsCache] " << i << ": ");
-          DEBUG(std::cout << cl.values[i] << std::endl);
+          DEBUG(std::cout << "[PullNeighborsCache] " << i << ": "
+                          << cl.values[i] << std::endl);
           neighbors_q.write(cl.values[i]);
         }
       }
@@ -196,6 +221,10 @@ void PullNeighborsCache(
 
     DEBUG_CACHE(std::cout << "[PullNeighborsCache] hits: " << hit 
                           << " misses: " << miss << std::endl);
+#ifdef CACHE_STATS
+    stats[0] = hit;
+    stats[1] = miss;
+#endif // CACHE_STATS
   }
 }
 
@@ -203,8 +232,8 @@ void ProcessingElement(
     nid_t num_nodes, tapa::istream<nid_t> &config_q,
     tapa::ostream<nid_t> &update_q, tapa::ostream<Update> &ir_q,
     tapa::ostream<nid_t> &pull_req_q, tapa::istream<nid_t> &pull_resp_q,
+    tapa::ostream<nid_t> &pull_early_term_q,
     tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
-    tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
     tapa::mmap<depth_t> depth
 ) {
   Bitmap::bitmap_t frontier[Bitmap::bitmap_size(MAX_NODES)];
@@ -246,9 +275,11 @@ void ProcessingElement(
     if (is_push) { // PUSH
       push:
       for (nid_t u = 0; u < num_nodes; u++) {
+#pragma HLS unroll=8
         if (Bitmap::get_bit(frontier, u)) {
           DEBUG(std::cout << "[Push] node " << u << ": ");
-          push_neighbors:
+
+          push_neis:
           for (offset_t off = push_index[u]; off < push_index[u + 1]; off++) {
 #pragma HLS pipeline
             nid_t v = push_neighbors[off];
@@ -273,17 +304,18 @@ void ProcessingElement(
           pull_req_q.write(v);
           bool set_bit = false;
 
-          pull_neighbors:
+          pull_neis:
           TAPA_WHILE_NOT_EOT(pull_resp_q) {
 #pragma HLS pipeline
             nid_t u = pull_resp_q.read(nullptr);
             if (not set_bit and Bitmap::get_bit(frontier, u)) {
-              set_bit = true;
               Bitmap::set_bit(explored, v);
               Bitmap::set_bit(next_frontier, v);
               update_q.write(v);
               num_nodes_updated++;
               DEBUG(std::cout << "[Pull] node " << v << ": " << u << std::endl);
+              pull_early_term_q.write(v);
+              set_bit = true;
             }
           }
           pull_resp_q.try_open(); // Reset stream.
@@ -308,10 +340,9 @@ void DepthWriter(tapa::istream<nid_t> &update_q, tapa::mmap<depth_t> depth) {
   for (;;) {
     TAPA_WHILE_NOT_EOT(update_q) {
       auto u = update_q.read(nullptr);
+      depth[u] = cur_depth;
       //DEBUG(std::cout << "Updating node " << u 
                       //<< " with depth " << cur_depth << std::endl);
-
-      depth[u] = cur_depth;
     }
     update_q.try_open(); // Reset stream.
 
@@ -324,25 +355,33 @@ void bfs_fpga(
     const nid_t num_nodes, const offset_t num_edges,
     tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
     tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
-    tapa::mmap<depth_t> depth
+    tapa::mmap<depth_t> depth,
+#ifdef CACHE_STATS
+    tapa::mmap<offset_t> stats,
+#endif // CACHE_STATS
+    const int alpha, const int beta
 ) {
   assert(num_nodes <= MAX_NODES);
-  tapa::stream<nid_t, 1>   config_q;
-  tapa::stream<nid_t, 16>  update_q;
-  tapa::stream<Update, 1>  ir_q;
+  tapa::stream<nid_t, 1>  config_q;
+  tapa::stream<nid_t, 128> update_q;
+  tapa::stream<Update, 1> ir_q;
 
   tapa::stream<nid_t, 1>  pull_nodes_q;
-  tapa::stream<bool, 1>   pull_early_term_q;
-  tapa::stream<nid_t, 16> pull_neighbors_q;
+  tapa::stream<nid_t, 32> pull_neighbors_q;
+  tapa::stream<nid_t, 32> pull_early_term_q;
 
   tapa::task()
     .invoke(Controller, start_nid, start_degree, num_nodes, num_edges, 
-        config_q, ir_q, 15, 18)
+        config_q, ir_q, alpha, beta)
     .invoke<tapa::detach>(PullNeighborsCache, num_edges, pull_nodes_q, 
-        pull_neighbors_q, pull_index, pull_neighbors)
+        pull_neighbors_q, pull_early_term_q, pull_index, pull_neighbors
+#ifdef CACHE_STATS
+        , stats
+#endif // CACHE_STATS
+        )
     .invoke<tapa::detach>(ProcessingElement, num_nodes, config_q, update_q, 
-        ir_q, pull_nodes_q, pull_neighbors_q, 
-        push_index, push_neighbors, pull_index, pull_neighbors, depth)
+        ir_q, pull_nodes_q, pull_neighbors_q, pull_early_term_q,
+        push_index, push_neighbors, depth)
     .invoke<tapa::detach>(DepthWriter, update_q, depth);
 }
 
