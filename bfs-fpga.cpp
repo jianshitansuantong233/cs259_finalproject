@@ -123,10 +123,11 @@ void ProcessingElement(
     
     if (is_push) { // PUSH
       for (nid_t u = 0; u < num_nodes; u++) {
+#pragma HLS pipeline II=1
         if (Bitmap::get_bit(frontier, u)) {
           DEBUG(std::cout << "[push] node " << u << ": ");
           for (offset_t off = push_index[u]; off < push_index[u + 1]; off++) {
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
             nid_t v = push_neighbors[off];
             if (not Bitmap::get_bit(explored, v)) { // If child not explored.
               DEBUG(std::cout << v << " ");
@@ -144,9 +145,10 @@ void ProcessingElement(
     } else { // PULL
       num_edges_explored = 1;
       for (nid_t v = 0; v < num_nodes; v++) {
+#pragma HLS pipeline II=1
         if (not Bitmap::get_bit(explored, v)) { // If not explored.
           for (offset_t off = pull_index[v]; off < pull_index[v + 1]; off++) {
-#pragma HLS pipeline
+#pragma HLS pipeline II=1
             nid_t u = pull_neighbors[off];
             if (Bitmap::get_bit(frontier, u)) {
               Bitmap::set_bit(explored, v);
