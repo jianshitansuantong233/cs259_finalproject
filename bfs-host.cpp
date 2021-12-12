@@ -1,5 +1,5 @@
 #define DEBUG_ON
-#define EDGE_CENTRIC
+#define VERTEX_CENTRIC
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
@@ -131,7 +131,22 @@ int main(int argc, char *argv[]) {
   }
 #else
   {
-    nid_t start_nid = pullG.num_nodes / 8;
+    // Get the number of reachable vertices
+    std::vector<Vid> v_temp;
+    for(int i=0;i<edge_list.size();i++){
+      Vid temp;
+      temp = edge_list[i].second;
+      v_temp.push_back(temp);
+    }
+    std::sort(v_temp.begin(),v_temp.end());
+    for(int i=1;i!=v_temp.size();i++){
+      if(v_temp[i] == v_temp[i-1]){
+        v_temp.erase(v_temp.begin()+i);
+        i--;
+      }
+    }
+    // Get the number of all vertices
+    nid_t start_nid = 0;//pullG.num_nodes / 8;
     std::vector<Edge> e;
     for(int i=0;i<edge_list.size();i++){
       Edge temp;
@@ -139,12 +154,12 @@ int main(int argc, char *argv[]) {
       temp.dst = edge_list[i].second;
       e.push_back(temp);
     }
-    std::vector<VertexAttr> vertices;    
+    std::vector<Vid> vertices;    
     // Start partition process
     int size_of_graph = edge_list.size();
     for(int i=0;i<size_of_graph;i++){
-      VertexAttr source;
-      VertexAttr dest;
+      Vid source;
+      Vid dest;
       source = e[i].src;
       dest = e[i].dst;
       vertices.push_back(source);
@@ -160,25 +175,32 @@ int main(int argc, char *argv[]) {
     for(int i=0;i!=vertices.size();i++){
       vertices[i]=0xFFFFFFFF;
     }
-    vertices[pullG.num_nodes / 8] = 0;/*start index*/
-    std::vector<uint32_t> num_edges;
-    std::vector<uint32_t> edge_offsets;
-    edge_offsets.push_back(0);
+    vertices[start_nid] = 0;/*start index*/
+    std::vector<uint32_t> num_edges(vertices.size(),0);
+    std::vector<uint32_t> edge_offsets(vertices.size(),0);
+    //edge_offsets.push_back(0);
+    int prev = 0;
     for(int i=1;i!=size_of_graph;i++){
       if(e[i].src!=e[i-1].src){
-        edge_offsets.push_back(i);
+        edge_offsets[e[i].src]=i;
+        num_edges[e[i-1].src] = i-prev;
+        prev = i;
       }
     }
+    num_edges[e[size_of_graph-1].src] = size_of_graph - prev;
+    /*
+    std::cout<<edge_offsets.size()<<std::endl<<std::endl;
     for(int i=1;i<edge_offsets.size();i++){
       num_edges.push_back(edge_offsets[i]-edge_offsets[i-1]);
+      std::cout<<edge_offsets[i]-edge_offsets[i-1]<<std::endl;
     }
-    num_edges.push_back(size_of_graph-edge_offsets[edge_offsets.size()-1]);
+    num_edges.push_back(size_of_graph-edge_offsets[edge_offsets.size()-1]);*/
     std::string bitstream;
     if (const auto bitstream_ptr = getenv("TAPAB")) {
       bitstream = bitstream_ptr;
     }
     tapa::invoke(
-        bfs_fpga_edge, bitstream, vertices.size(), pullG.num_nodes / 8 /*start index*/, tapa::read_only_mmap<const Eid>(num_edges),
+        bfs_fpga_edge, bitstream, vertices.size(), v_temp.size(), start_nid /*start index*/, tapa::read_only_mmap<const Eid>(num_edges),
         tapa::read_only_mmap<const Eid>(edge_offsets), tapa::read_write_mmap<VertexAttr>(vertices), tapa::read_only_mmap<Edge>(e).reinterpret<bits<Edge>>());
 
     DEBUG(
@@ -187,7 +209,7 @@ int main(int argc, char *argv[]) {
         std::cout << vertices[u] << " ";
       std::cout << std::endl;
     });
-
+    std::cout<<pushG.num_nodes<<std::endl;
     std::vector<depth_t> validation_depths(pushG.num_nodes, INVALID_DEPTH);
     bfs_cpu_push(pushG, start_nid, validation_depths);
 

@@ -16,8 +16,8 @@ using edge_list_t = std::vector<edge_t>;
 using depth_t     = int;
 // Base types for Edge-centric
 const int PARTITION_NUM = 2; //should be sizeof(BRAM)/sizeof(edge+vertex)
-const int MAX_EDGE = 1024;
-const int MAX_VER = 100000;
+const int MAX_EDGE = 4096;
+const int MAX_VER = 5000;
 template <typename T>
 using bits = ap_uint<tapa::widthof<T>()>;
 
@@ -45,6 +45,7 @@ struct Resp{
   Vid v;
   bool finished;
 };
+using Update_num = Vid;
 // Invalid depth.
 constexpr depth_t INVALID_DEPTH = -1;
 
