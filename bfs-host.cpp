@@ -1,5 +1,5 @@
 #define DEBUG_ON
-#define VERTEX_CENTRIC
+#define EDGE_CENTRIC
 
 constexpr int NUM_PARTITIONS = 2;
 
