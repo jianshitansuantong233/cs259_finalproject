@@ -4,7 +4,6 @@
 #include "bfs-fpga.h"
 #include "util.h"
 
-using std::ostream;
 
 /**
  * @details Contoller of bfs. Send out all active partitions
@@ -13,7 +12,7 @@ using std::ostream;
  * @param[in]  vertices      - vertices, grabbed directly from DRAM. TODO: optimize it using prefetch & cache.
  * @param[out] updates       - temporary update tuples
  */
-void Control(Pid num_partitions, Pid start, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
+void Control(Pid num_partitions, Pid start_id, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
             tapa::mmap<VertexAttr> vertices, tapa::mmap<bits<Edge>> edges, 
             tapa::ostream<Task>& task_stream, tapa::istream<Resp>& resp_stream){
     int num_sent = 0;// sent partitions
@@ -21,12 +20,15 @@ void Control(Pid num_partitions, Pid start, tapa::mmap<const Eid> num_edges, tap
     bool all_done = false;
     bool done[MAX_VER] = {};
     bool active[MAX_VER] = {};
-    active[start] = true;
+    active[start_id] = true;
     while(num_done!=num_sent | !all_done){
+#pragma HLS loop_tripcount max=MAX_VER
         all_done = true;
         //std::cout<<"num_sent "<<num_sent<<" num_done "<<num_done<<std::endl;
         // do scatter
         for(int i=0;i<num_partitions;i++){
+#pragma HLS loop_tripcount max=MAX_VER
+#pragma HLS unroll factor=2
             //std::cout<<"Processing partition "<<i<<std::endl;
             if(!done[i] & active[i]){
                 Task t{edge_offsets[i], num_edges[i], vertices[i]};
@@ -62,7 +64,9 @@ void Scatter(tapa::mmap<bits<Edge>> edges, tapa::istream<Task>& task_stream,
     TAPA_WHILE_NOT_EOT(task_stream) {
         Task t = task_stream.read();
         //std::cout <<"Processing task: src "<<t.start_position<<", num "<<t.num_edges<<" source depth "<<t.depth<<std::endl;
-        for(int i=0;i<t.num_edges;i++){            
+        for(int i=0;i<t.num_edges;i++){        
+#pragma HLS loop_tripcount max=MAX_EDGE   
+#pragma HLS unroll factor=16
             auto e = tapa::bit_cast<Edge>(edges[t.start_position+i]);
             Update_edge_version u{ e.dst, t.depth+1};
             updates.write(u);
@@ -88,6 +92,8 @@ void Gather(tapa::istream<Update_edge_version>& temp_updates, tapa::istream<Upda
         Update_num num = update_num_stream.read(); 
         //std::cout<<"Will proceses "<<num<<" updates"<<std::endl;
         for(int i=0;i<num;i++){
+#pragma HLS loop_tripcount max=MAX_EDGE
+#pragma HLS unroll factor=16
             Update_edge_version u = temp_updates.read();
             //std::cout <<"Processing update "<<u.dst<<", "<<u.depth<<std::endl;
             if(vertices[u.dst]>u.depth){
@@ -110,14 +116,14 @@ void Gather(tapa::istream<Update_edge_version>& temp_updates, tapa::istream<Upda
  * @param[inout] vertices       - vertices 
  * @param[in]    edges          - edges
  */
-void bfs_fpga_edge(Pid num_partitions, Pid start, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
+void bfs_fpga_edge(Pid num_partitions, const Pid start_id, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
                     tapa::mmap<VertexAttr> vertices, tapa::mmap<bits<Edge>> edges) {
   tapa::stream<Task, MAX_VER> task_stream("task_stream");
   tapa::stream<Update_edge_version, MAX_VER*MAX_EDGE> update_stream("update_stream");
   tapa::stream<Update_num, MAX_VER> update_num_stream("update_num_stream");
   tapa::stream<Resp, MAX_VER*MAX_EDGE> resp_stream("resp_stream");
   tapa::task()
-      .invoke(Control, num_partitions, start, num_edges, edge_offsets, vertices, edges, task_stream, resp_stream)
+      .invoke(Control, num_partitions, start_id, num_edges, edge_offsets, vertices, edges, task_stream, resp_stream)
       .invoke(Scatter, edges, task_stream, update_stream, update_num_stream)
       .invoke(Gather, update_stream, update_num_stream, vertices, resp_stream);
 }

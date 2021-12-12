@@ -173,8 +173,8 @@ int main(int argc, char *argv[]) {
       vertices[i]=0xFFFFFFFF;
     }
     vertices[start_nid] = 0;/*start index*/
-    std::vector<uint32_t> num_edges(vertices.size(),0);
-    std::vector<uint32_t> edge_offsets(vertices.size(),0);
+    std::vector<Eid> num_edges(vertices.size(),0);
+    std::vector<Eid> edge_offsets(vertices.size(),0);
     //edge_offsets.push_back(0);
     int prev = 0;
     for(int i=1;i!=size_of_graph;i++){

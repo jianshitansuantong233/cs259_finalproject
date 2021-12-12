@@ -20,7 +20,7 @@ using offset_vec_t = std::vector<offset_t>;
 
 // Base types for Edge-centric
 const int PARTITION_NUM = 2; //should be sizeof(BRAM)/sizeof(edge+vertex)
-const int MAX_EDGE = 4096;
+const int MAX_EDGE = 2048;
 const int MAX_VER = 5000;
 template <typename T>
 using bits = ap_uint<tapa::widthof<T>()>;
