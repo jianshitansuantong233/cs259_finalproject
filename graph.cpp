@@ -75,3 +75,62 @@ void build_graphs(edge_list_t &edge_list,
     }
   }
 }
+
+std::tuple<std::vector<offset_vec_t>, std::vector<nid_vec_t>, std::vector<nid_t>>
+partition_edges(PushGraph * const g, int num_partitions) {
+  offset_t avg_edges = (g->num_edges + num_partitions - 1) / num_partitions;
+
+  std::vector<nid_t> partition_nodes(num_partitions);
+  nid_t    cur_node       = 0;
+  offset_t cur_edges      = 0;
+  offset_t expected_edges = avg_edges;
+
+  for (int i = 0; i < num_partitions; i++) {
+    while (cur_node < g->num_nodes) {
+      offset_t new_edges = cur_edges + 
+                           (g->index[cur_node + 1] - g->index[cur_node]);
+
+      bool done = false;
+      if (new_edges >= expected_edges) {
+        if (new_edges - expected_edges < expected_edges - cur_edges)
+          partition_nodes[i] = ++cur_node;
+        else
+          partition_nodes[i] = cur_node;
+        done = true;
+      }
+
+      cur_node++;
+      cur_edges = new_edges;
+
+      if (done) {
+        expected_edges += avg_edges;
+        break;
+      }
+    }
+  }
+  partition_nodes.back() = g->num_nodes;
+
+  std::vector<offset_vec_t> index_es(num_partitions);
+  std::vector<nid_vec_t> neighbors_es(num_partitions);
+  nid_t start = 0;
+  for (int i = 0; i < num_partitions; i++) {
+    nid_t end = partition_nodes[i];
+
+    for (nid_t u = start; u < end; u++) {
+      index_es[i].push_back(g->index[u]);
+      for (offset_t off = g->index[u]; off < g->index[u + 1]; off++) {
+        neighbors_es[i].push_back(g->neighbors[off]);
+      }
+    }
+    index_es[i].push_back(g->index[end]);
+
+    start = end;
+  }
+
+  std::vector<nid_t> num_nodes(num_partitions + 1);
+  num_nodes[0] = 0;
+  for (int i = 0; i < num_partitions; i++)
+    num_nodes[i + 1] = num_nodes[i] + index_es[i].size() - 1;
+
+  return std::make_tuple(index_es, neighbors_es, num_nodes);
+}

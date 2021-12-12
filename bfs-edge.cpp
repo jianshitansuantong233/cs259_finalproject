@@ -13,7 +13,7 @@ using std::ostream;
  * @param[in]  vertices      - vertices, grabbed directly from DRAM. TODO: optimize it using prefetch & cache.
  * @param[out] updates       - temporary update tuples
  */
-void Control(Pid num_partitions, Pid num_reachable, Pid start, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
+void Control(Pid num_partitions, Pid start, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
             tapa::mmap<VertexAttr> vertices, tapa::mmap<bits<Edge>> edges, 
             tapa::ostream<Task>& task_stream, tapa::istream<Resp>& resp_stream){
     int num_sent = 0;// sent partitions
@@ -41,9 +41,9 @@ void Control(Pid num_partitions, Pid num_reachable, Pid start, tapa::mmap<const 
         // collect response from gather
         TAPA_WHILE_NOT_EOT(resp_stream){
             Resp r = resp_stream.read(nullptr);
-            active[r.v] = true;
+            active[r] = true;
             all_done = false;            
-            //std::cout<<"Activate "<<r.v<<std::endl;
+            //std::cout<<"Activate "<<r<<std::endl;
         }
         num_done++;
         resp_stream.open();
@@ -92,7 +92,7 @@ void Gather(tapa::istream<Update_edge_version>& temp_updates, tapa::istream<Upda
             //std::cout <<"Processing update "<<u.dst<<", "<<u.depth<<std::endl;
             if(vertices[u.dst]>u.depth){
                 vertices[u.dst] = u.depth;
-                Resp re{u.dst, false};
+                Resp re = u.dst;
                 resp_stream.write(re);
                 //std::cout <<"Writing update "<<u.dst<<", "<<u.depth<<std::endl;
             }
@@ -110,14 +110,14 @@ void Gather(tapa::istream<Update_edge_version>& temp_updates, tapa::istream<Upda
  * @param[inout] vertices       - vertices 
  * @param[in]    edges          - edges
  */
-void bfs_fpga_edge(Pid num_partitions, Pid num_reachable, Pid start, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
+void bfs_fpga_edge(Pid num_partitions, Pid start, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
                     tapa::mmap<VertexAttr> vertices, tapa::mmap<bits<Edge>> edges) {
   tapa::stream<Task, MAX_VER> task_stream("task_stream");
   tapa::stream<Update_edge_version, MAX_VER*MAX_EDGE> update_stream("update_stream");
   tapa::stream<Update_num, MAX_VER> update_num_stream("update_num_stream");
   tapa::stream<Resp, MAX_VER*MAX_EDGE> resp_stream("resp_stream");
   tapa::task()
-      .invoke(Control, num_partitions, num_reachable, start, num_edges, edge_offsets, vertices, edges, task_stream, resp_stream)
+      .invoke(Control, num_partitions, start, num_edges, edge_offsets, vertices, edges, task_stream, resp_stream)
       .invoke(Scatter, edges, task_stream, update_stream, update_num_stream)
       .invoke(Gather, update_stream, update_num_stream, vertices, resp_stream);
 }

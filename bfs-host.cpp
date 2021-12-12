@@ -1,5 +1,8 @@
 #define DEBUG_ON
-#define VERTEX_CENTRIC
+#define EDGE_CENTRIC
+
+constexpr int NUM_PARTITIONS = 2;
+
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
@@ -90,14 +93,22 @@ int main(int argc, char *argv[]) {
       bitstream = bitstream_ptr;
     }
 
-    auto start_degree = pushG.index[start_nid + 1] - pushG.index[start_nid];
+    auto partition = partition_edges(&pushG, V_NUM_PARTITIONS);
+    auto index_es = std::get<0>(partition);
+    auto neighbors_es = std::get<1>(partition);
+    auto num_nodes = std::get<2>(partition);
+
+    DEBUG(
+    for (int i = 0; i < V_NUM_PARTITIONS; i++) {
+      std::cout << "Partition " << i << ": " << (num_nodes[i + 1] - num_nodes[i])
+                << " nodes and " << neighbors_es[i].size() << " edges" << std::endl;
+    });
+
     tapa::invoke(
         bfs_fpga, bitstream, 
-        start_nid, start_degree, pushG.num_nodes, pushG.num_edges,
+        start_nid, pushG.num_nodes, 
         tapa::read_only_mmap<offset_t>(pushG.index),
         tapa::read_only_mmap<nid_t>(pushG.neighbors),
-        tapa::read_only_mmap<offset_t>(pullG.index),
-        tapa::read_only_mmap<nid_t>(pullG.neighbors),
         tapa::read_write_mmap<depth_t>(fpga_depths));
 
     DEBUG(
@@ -114,37 +125,23 @@ int main(int argc, char *argv[]) {
     for (nid_t u = 0; u < pushG.num_nodes; u++) {
       if (fpga_depths[u] != validation_depths[u]) {
         if (err_count < PRINT_MAX_ERRORS) {
-          DEBUG(std::cout << "[error] node " << u << " fpga depth (" 
-                          << fpga_depths[u] << ") != oracle depth ("
-                          << validation_depths[u] << ")" << std::endl);
+          std::cerr << "[error] node " << u << " fpga depth (" 
+                    << fpga_depths[u] << ") != oracle depth ("
+                    << validation_depths[u] << ")" << std::endl;
         }
         err_count++;
       }
     }
     if (err_count >= PRINT_MAX_ERRORS) {
-      DEBUG(std::cout << "[error] ... " << std::endl
-                      << "[error] and " << (err_count - PRINT_MAX_ERRORS)
-                      << " more errors" << std::endl);
+      std::cerr << "[error] ... " << std::endl
+                << "[error] and " << (err_count - PRINT_MAX_ERRORS)
+                << " more errors" << std::endl;
     }
     if (err_count != 0) return EXIT_FAILURE;
-    else /* Success */  DEBUG(std::cout << "Validation success!" << std::endl);
+    else /* Success */  std::cout << "Validation success!" << std::endl;
   }
 #else
   {
-    // Get the number of reachable vertices
-    std::vector<Vid> v_temp;
-    for(int i=0;i<edge_list.size();i++){
-      Vid temp;
-      temp = edge_list[i].second;
-      v_temp.push_back(temp);
-    }
-    std::sort(v_temp.begin(),v_temp.end());
-    for(int i=1;i!=v_temp.size();i++){
-      if(v_temp[i] == v_temp[i-1]){
-        v_temp.erase(v_temp.begin()+i);
-        i--;
-      }
-    }
     // Get the number of all vertices
     nid_t start_nid = 0;//pullG.num_nodes / 8;
     std::vector<Edge> e;
@@ -200,7 +197,7 @@ int main(int argc, char *argv[]) {
       bitstream = bitstream_ptr;
     }
     tapa::invoke(
-        bfs_fpga_edge, bitstream, vertices.size(), v_temp.size(), start_nid /*start index*/, tapa::read_only_mmap<const Eid>(num_edges),
+        bfs_fpga_edge, bitstream, vertices.size(), start_nid /*start index*/, tapa::read_only_mmap<const Eid>(num_edges),
         tapa::read_only_mmap<const Eid>(edge_offsets), tapa::read_write_mmap<VertexAttr>(vertices), tapa::read_only_mmap<Edge>(e).reinterpret<bits<Edge>>());
 
     DEBUG(
