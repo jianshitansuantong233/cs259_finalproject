@@ -20,8 +20,7 @@ constexpr int V_NUM_PARTITIONS = 2;
 void bfs_fpga(
     const nid_t start, const nid_t num_nodes, 
     tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
-    tapa::mmap<depth_t> depths);
-
-void bfs_fpga_edge(Pid num_partitions, Pid start, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
-                    tapa::mmap<VertexAttr> vertices, tapa::mmap<bits<Edge>> edges
+    tapa::mmap<depth_t> depth);
+void bfs_fpga_edge(Pid num_partitions, Pid num_reachable, Pid start, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
+                    tapa::mmap<VertexAttr> vertices, tapa::mmap<bits<Edge>> edges);
 #endif  // BFS_FPGA_H
