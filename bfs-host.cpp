@@ -1,5 +1,5 @@
 #define DEBUG_ON
-#define EDGE_CENTRIC
+#define VERTEX_CENTRIC
 
 constexpr int NUM_PARTITIONS = 2;
 
@@ -93,16 +93,16 @@ int main(int argc, char *argv[]) {
       bitstream = bitstream_ptr;
     }
 
-    auto partition = partition_edges(&pushG, V_NUM_PARTITIONS);
-    auto index_es = std::get<0>(partition);
-    auto neighbors_es = std::get<1>(partition);
-    auto num_nodes = std::get<2>(partition);
+    //auto partition = partition_edges(&pushG, V_NUM_PARTITIONS);
+    //auto index_es = std::get<0>(partition);
+    //auto neighbors_es = std::get<1>(partition);
+    //auto num_nodes = std::get<2>(partition);
 
-    DEBUG(
-    for (int i = 0; i < V_NUM_PARTITIONS; i++) {
-      std::cout << "Partition " << i << ": " << (num_nodes[i + 1] - num_nodes[i])
-                << " nodes and " << neighbors_es[i].size() << " edges" << std::endl;
-    });
+    //DEBUG(
+    //for (int i = 0; i < V_NUM_PARTITIONS; i++) {
+      //std::cout << "Partition " << i << ": " << (num_nodes[i + 1] - num_nodes[i])
+                //<< " nodes and " << neighbors_es[i].size() << " edges" << std::endl;
+    //});
 
     tapa::invoke(
         bfs_fpga, bitstream, 

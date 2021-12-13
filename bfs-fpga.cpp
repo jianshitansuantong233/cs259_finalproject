@@ -10,15 +10,18 @@
 constexpr nid_t MAX_NODES = 1 << 13; // 2^{13} = 8,192
 
 void ProcessingElement(
-    const nid_t num_nodes, const nid_t start_nid,
-    tapa::mmap<offset_t> index, tapa::mmap<nid_t> neighbors,
-    tapa::ostream<nid_t> &update_q
+    nid_t num_nodes, const nid_t start_nid,
+    tapa::ostream<nid_t> &update_q,
+    tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors
 ) {
   Bitmap::bitmap_t frontier[Bitmap::bitmap_size(MAX_NODES)];
   Bitmap::bitmap_t next_frontier[Bitmap::bitmap_size(MAX_NODES)];
   Bitmap::bitmap_t explored[Bitmap::bitmap_size(MAX_NODES)];
   for (nid_t i = 0; i < Bitmap::bitmap_size(MAX_NODES); i++)
     frontier[i] = next_frontier[i] = explored[i] = 0;
+//#pragma HLS array_partition variable=frontier complete
+//#pragma HLS array_partition variable=next_frontier complete
+//#pragma HLS array_partition variable=explored complete
 
   // Setup starting node.
   Bitmap::set_bit(frontier, start_nid);
@@ -34,14 +37,14 @@ void ProcessingElement(
 
     push:
     for (nid_t u = 0; u < num_nodes; u++) {
-#pragma HLS pipeline
+#pragma HLS unroll
       if (Bitmap::get_bit(frontier, u)) {
         DEBUG(std::cout << "[Push] node " << u << ": ");
 
         push_neis:
-        for (offset_t off = index[u]; off < index[u + 1]; off++) {
+        for (offset_t off = push_index[u]; off < push_index[u + 1]; off++) {
 #pragma HLS pipeline
-          nid_t v = neighbors[off];
+          nid_t v = push_neighbors[off];
           if (not Bitmap::get_bit(explored, v)) { // If child not explored.
             DEBUG(std::cout << v << " ");
             Bitmap::set_bit(explored, v);
@@ -49,7 +52,7 @@ void ProcessingElement(
             update_q.write(v);
             num_updates++;
           }
-        }
+        }          
         DEBUG(std::cout << std::endl);
       }
     }
@@ -76,17 +79,15 @@ void DepthWriter(tapa::istream<nid_t> &update_q, tapa::mmap<depth_t> depth) {
 }
 
 void bfs_fpga(
-    const nid_t start_nid, const nid_t num_nodes,
+    const nid_t start_nid, const nid_t num_nodes, 
     tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
     tapa::mmap<depth_t> depths
 ) {
   assert(num_nodes <= MAX_NODES);
   tapa::stream<nid_t, 128> update_q;
-  tapa::stream<nid_t, 1> node_req_q;
-  tapa::stream<nid_t, 128> neighbors_resp_q;
 
   tapa::task()
-    .invoke(ProcessingElement, num_nodes, start_nid, 
-        push_index, push_neighbors, update_q)
+    .invoke(ProcessingElement, num_nodes, start_nid, update_q, 
+        push_index, push_neighbors)
     .invoke<tapa::detach>(DepthWriter, update_q, depths);
 }
