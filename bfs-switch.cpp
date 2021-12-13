@@ -5,7 +5,6 @@
 #include <iostream>
 #include "bitmap.h"
 #include "util.h"
-#include "limits.h"
 
 bool PUSH_OR_PULL = false; // true = PUSH, false = PULL
 
@@ -20,7 +19,7 @@ struct Update {
   offset_t num_edges_explored;
 };
 
-void Controller(nid_t start_nid, nid_t num_nodes, nid_t num_edges,
+void Controller_switch(nid_t start_nid, nid_t num_nodes, nid_t num_edges,
     tapa::ostream<nid_t> &config_q, tapa::istream<Update> &ir_q
 ) {
   config_q.write(start_nid);
@@ -43,7 +42,6 @@ void Controller(nid_t start_nid, nid_t num_nodes, nid_t num_edges,
                    Unseen vertices = total vertices - traversed - frontier - seen vertices
       
       Switching logic: PushTr > PullTr? Pull : Push;
-
       - Seen vertices = Next Frontier, 
       - `update` represents the Frontier for this epoch
     */
@@ -80,29 +78,33 @@ void Controller(nid_t start_nid, nid_t num_nodes, nid_t num_edges,
   }
 }
 
-void ProcessingElement(
-    nid_t num_nodes, const nid_t start_nid,
-    tapa::ostream<nid_t> &update_q,
-    tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors
+void ProcessingElement_switch(
+    nid_t num_nodes, tapa::istream<nid_t> &config_q,
+    tapa::ostream<nid_t> &update_q, tapa::ostream<Update> &ir_q,
+    tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
+    tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
+    tapa::mmap<depth_t> depth
 ) {
   Bitmap::bitmap_t frontier[Bitmap::bitmap_size(MAX_NODES)];
   Bitmap::bitmap_t next_frontier[Bitmap::bitmap_size(MAX_NODES)];
   Bitmap::bitmap_t explored[Bitmap::bitmap_size(MAX_NODES)];
   for (nid_t i = 0; i < Bitmap::bitmap_size(MAX_NODES); i++)
     frontier[i] = next_frontier[i] = explored[i] = 0;
-//#pragma HLS array_partition variable=frontier complete
-//#pragma HLS array_partition variable=next_frontier complete
-//#pragma HLS array_partition variable=explored complete
 
   // Setup starting node.
-  Bitmap::set_bit(frontier, start_nid);
-  Bitmap::set_bit(explored, start_nid);
-  update_q.write(start_nid); // Send depth update for starting node.
-  update_q.close();
+  TAPA_WHILE_NOT_EOT(config_q) {
+    nid_t u = config_q.read(nullptr);
+    Bitmap::set_bit(frontier, u);
+    Bitmap::set_bit(explored, u);
+    update_q.write(u); // Send depth update for starting node.
+  }
+  config_q.try_open(); // Reset stream.
+  update_q.close(); // End update stream.
 
-  nid_t num_updates;
-  do {
-    num_updates = 0;
+  // First epoch is always push.
+  bool is_push = PUSH_OR_PULL;
+  nid_t    num_nodes_updated;
+  offset_t num_edges_explored;
 
   for (;;) {
 #pragma HLS loop_tripcount max=2048
@@ -158,11 +160,10 @@ void ProcessingElement(
               break;
             }
           }
-        }          
-        DEBUG(std::cout << std::endl);
+        }
       }
     }
-    update_q.close(); // Inform DepthWriter the current epoch has ended.
+    update_q.close(); // Inform DepthWriter_switch the current epoch has ended.
 
     // Swap frontiers.
     std::swap(frontier, next_frontier);
@@ -176,12 +177,15 @@ void ProcessingElement(
   }
 }
 
-void DepthWriter(tapa::istream<nid_t> &update_q, tapa::mmap<depth_t> depth) {
+void DepthWriter_switch(tapa::istream<nid_t> &update_q, tapa::mmap<depth_t> depth) {
   depth_t cur_depth = 0;
   for (;;) {
 #pragma HLS loop_tripcount max=2048
     TAPA_WHILE_NOT_EOT(update_q) {
       auto u = update_q.read(nullptr);
+      //DEBUG(std::cout << "Updating node " << u 
+                      //<< " with depth " << cur_depth << std::endl);
+
       depth[u] = cur_depth;
     }
     update_q.try_open(); // Reset stream.
@@ -193,14 +197,17 @@ void DepthWriter(tapa::istream<nid_t> &update_q, tapa::mmap<depth_t> depth) {
 void bfs_switch(
     nid_t start_nid, nid_t num_nodes, nid_t num_edges,
     tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
-    tapa::mmap<depth_t> depths
+    tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
+    tapa::mmap<depth_t> depth
 ) {
   assert(num_nodes <= MAX_NODES);
-  tapa::stream<nid_t, 128> update_q;
+  tapa::stream<nid_t, 1>  config_q;
+  tapa::stream<nid_t, 8>  update_q;
+  tapa::stream<Update, 1> ir_q;
 
   tapa::task()
-    .invoke(Controller, start_nid, num_nodes, num_edges, config_q, ir_q)
-    .invoke<tapa::detach>(ProcessingElement, num_nodes, config_q, update_q, 
+    .invoke(Controller_switch, start_nid, num_nodes, num_edges, config_q, ir_q)
+    .invoke<tapa::detach>(ProcessingElement_switch, num_nodes, config_q, update_q, 
         ir_q, push_index, push_neighbors, pull_index, pull_neighbors, depth)
-    .invoke<tapa::detach>(DepthWriter, update_q, depth);
+    .invoke<tapa::detach>(DepthWriter_switch, update_q, depth);
 }

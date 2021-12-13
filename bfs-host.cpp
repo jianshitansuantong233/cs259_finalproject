@@ -1,6 +1,6 @@
 #define DEBUG_ON
 #define VERTEX_CENTRIC
-#define SECOND_SWITCH
+// #define SECOND_SWITCH
 
 constexpr int NUM_PARTITIONS = 2;
 
@@ -110,6 +110,8 @@ int main(int argc, char *argv[]) {
         bfs_switch, bitstream, start_nid, pushG.num_nodes, pushG.num_edges,
         tapa::read_only_mmap<offset_t>(pushG.index),
         tapa::read_only_mmap<nid_t>(pushG.neighbors),
+        tapa::read_only_mmap<offset_t>(pullG.index),
+        tapa::read_only_mmap<nid_t>(pullG.neighbors),
         tapa::read_write_mmap<depth_t>(fpga_depths));
     #else
     tapa::invoke(
@@ -118,6 +120,7 @@ int main(int argc, char *argv[]) {
         tapa::read_only_mmap<offset_t>(pushG.index),
         tapa::read_only_mmap<nid_t>(pushG.neighbors),
         tapa::read_write_mmap<depth_t>(fpga_depths));
+    #endif
 
 
     DEBUG(

@@ -23,8 +23,9 @@ void bfs_fpga(
     tapa::mmap<depth_t> depth);
 
 void bfs_switch(
-    const nid_t start, const nid_t num_nodes, const nid_t num_edges,
+    nid_t start, nid_t num_nodes, nid_t num_edges,
     tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
+    tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
     tapa::mmap<depth_t> depth);
 
 void bfs_fpga_edge(Pid num_partitions, const Pid start_id, tapa::mmap<const Eid> num_edges, tapa::mmap<const Eid> edge_offsets, 
