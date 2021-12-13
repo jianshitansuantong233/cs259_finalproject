@@ -28,7 +28,7 @@ void Control(Pid num_partitions, Pid start_id, tapa::mmap<const Eid> num_edges, 
         // do scatter
         for(int i=0;i<num_partitions;i++){
 #pragma HLS loop_tripcount max=MAX_VER
-#pragma HLS unroll factor=2
+#pragma HLS pipeline
             //std::cout<<"Processing partition "<<i<<std::endl;
             if(!done[i] & active[i]){
                 Task t{edge_offsets[i], num_edges[i], vertices[i]};
@@ -66,7 +66,7 @@ void Scatter(tapa::mmap<bits<Edge>> edges, tapa::istream<Task>& task_stream,
         //std::cout <<"Processing task: src "<<t.start_position<<", num "<<t.num_edges<<" source depth "<<t.depth<<std::endl;
         for(int i=0;i<t.num_edges;i++){        
 #pragma HLS loop_tripcount max=MAX_EDGE   
-#pragma HLS unroll factor=16
+#pragma HLS pipeline
             auto e = tapa::bit_cast<Edge>(edges[t.start_position+i]);
             Update_edge_version u{ e.dst, t.depth+1};
             updates.write(u);
@@ -93,7 +93,7 @@ void Gather(tapa::istream<Update_edge_version>& temp_updates, tapa::istream<Upda
         //std::cout<<"Will proceses "<<num<<" updates"<<std::endl;
         for(int i=0;i<num;i++){
 #pragma HLS loop_tripcount max=MAX_EDGE
-#pragma HLS unroll factor=16
+#pragma HLS pipeline
             Update_edge_version u = temp_updates.read();
             //std::cout <<"Processing update "<<u.dst<<", "<<u.depth<<std::endl;
             if(vertices[u.dst]>u.depth){
