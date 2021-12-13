@@ -10,7 +10,8 @@ find_package(TAPA REQUIRED)
 find_package(SDx REQUIRED)
 
 add_executable(bfs)
-target_sources(bfs PRIVATE bfs-host.cpp graph.cpp bfs-fpga.cpp bfs-cpu.cpp)
+#target_sources(bfs PRIVATE bfs-host.cpp graph.cpp bfs-fpga.cpp bfs-cpu.cpp)
+target_sources(bfs PRIVATE bfs-host.cpp graph.cpp bfs-switch.cpp bfs-cpu.cpp)
 target_link_libraries(bfs PRIVATE tapa::tapa)
 file(
   DOWNLOAD "https://snap.stanford.edu/data/facebook_combined.txt.gz"
@@ -25,8 +26,8 @@ execute_process(
 
 add_tapa_target(
   hls
-  INPUT bfs-fpga.cpp
-  TOP bfs_fpga
+  INPUT bfs-switch.cpp
+  TOP bfs_switch
   PLATFORM ${PLATFORM})
 
 add_xocc_hw_link_targets(

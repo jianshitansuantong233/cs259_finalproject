@@ -30,6 +30,7 @@ void Controller(nid_t start_nid, nid_t num_nodes, nid_t num_edges,
 
   Mode mode = Mode::push;
   for (nid_t epoch = 0; epoch < MAX_EPOCHS; epoch++) {
+#pragma HLS unroll factor=4
     /*
       For each epoch,
         - Average # of Push traversal edges(PushTr) 
@@ -108,6 +109,7 @@ void ProcessingElement(
   offset_t num_edges_explored;
 
   for (;;) {
+#pragma HLS loop_tripcount max=2048
     num_nodes_updated = 0;
     num_edges_explored = 0;
 
@@ -180,6 +182,7 @@ void ProcessingElement(
 void DepthWriter(tapa::istream<nid_t> &update_q, tapa::mmap<depth_t> depth) {
   depth_t cur_depth = 0;
   for (;;) {
+#pragma HLS loop_tripcount max=2048
     TAPA_WHILE_NOT_EOT(update_q) {
       auto u = update_q.read(nullptr);
       //DEBUG(std::cout << "Updating node " << u 
@@ -193,7 +196,7 @@ void DepthWriter(tapa::istream<nid_t> &update_q, tapa::mmap<depth_t> depth) {
   }
 }
 
-void bfs_fpga(
+void bfs_switch(
     nid_t start_nid, nid_t num_nodes, nid_t num_edges,
     tapa::mmap<offset_t> push_index, tapa::mmap<nid_t> push_neighbors,
     tapa::mmap<offset_t> pull_index, tapa::mmap<nid_t> pull_neighbors,
